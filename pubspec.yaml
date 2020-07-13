@@ -1,5 +1,5 @@
 name: trackify_android
-description: A new Flutter project.
+description: Trackify's Android app
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -17,6 +17,8 @@ environment:
   sdk: ">=2.1.0 <3.0.0"
 
 dependencies:
+  flutter_secure_storage:
+  http:
   flutter:
     sdk: flutter
 
