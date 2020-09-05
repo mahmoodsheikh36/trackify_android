@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+const String BACKEND = 'http://localhost:5000';
+
 String validatePasswordInput(String password) {
   if (password.isEmpty)
     return 'password cant be empty';
@@ -20,14 +22,25 @@ String validateUsernameInput(String username) {
   return null;
 }
 
+String validateEmailInput(String email) {
+  bool valid = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(email);
+  if (!valid)
+    return 'email not valid';
+  return null;
+}
+
 class Track {
   String id;
   String name;
   List<Artist> artists;
   Album album;
-  Track(this.id, this.name, this.artists, this.album);
+  int msListened;
+  Track(this.id, this.name, this.artists, this.album, {this.msListened = 0});
   static Track fromJson(Map<String, dynamic> jsonMap) {
-    return Track(jsonMap['id'], jsonMap['name'], null, null);
+    final track = Track(jsonMap['id'].toString(), jsonMap['name'].toString(), null, Album.fromJson(jsonMap['album']));
+    if (jsonMap.containsKey('listened_ms'))
+      track.msListened = jsonMap['listened_ms'];
+    return track;
   }
 }
 
@@ -44,19 +57,20 @@ class Album {
   String id;
   String name;
   List<Artist> artists;
-  Album(this.id, this.name, this.artists);
+  String imageUrl;
+  Album(this.id, this.name, this.artists, this.imageUrl);
   static Album fromJson(Map<String, dynamic> jsonMap) {
-    return Album(jsonMap['id'], jsonMap['name'], null);
+    return Album(jsonMap['id'].toString(), jsonMap['name'].toString(), null, jsonMap['cover'].toString());
   }
 }
 
 class Play {
   String id;
   Track track;
-  DateTime date;
-  Play(this.id, this.track, this.date);
+  DateTime playTime;
+  Play(this.id, this.track, this.playTime);
   static Play fromJson(Map<String, dynamic> jsonMap) {
-    return Play(jsonMap['id'], Track.fromJson(jsonMap['track']), jsonMap['date']);
+    return Play(jsonMap['id'], Track.fromJson(jsonMap['track']), DateTime.parse(jsonMap['play_time']));
   }
 }
 
@@ -76,6 +90,7 @@ class APIClient {
       this.refreshToken = accessValues['refresh_token'];
       this.accessTokenExpiryTime = int.parse(accessValues['expiry_time']);
     }
+    print('done init');
   }
 
   void fetchNewAccessTokenIfNeeded() {
@@ -86,8 +101,8 @@ class APIClient {
   }
 
   Future<List<Play>> fetchHistory() async {
-    http.Response r = await http.get('https://trackifyapp.net/api/history', headers: {
-      'Authorization': 'Bearer $this.access_token'
+    http.Response r = await http.get(BACKEND + '/api/history', headers: {
+      'Authorization': 'Bearer ${this.accessToken}'
     });
     List<Play> plays = [];
     List<dynamic> playsJson = json.decode(r.body);
@@ -95,6 +110,19 @@ class APIClient {
       plays.add(Play.fromJson(playJson));
     }
     return plays;
+  }
+
+  Future<List<Track>> fetchTopTracks() async {
+    print('fetch top tracks called');
+    http.Response r = await http.get(BACKEND + '/api/top_tracks?hrs_limit=0', headers: {
+      'Authorization': 'Bearer ${this.accessToken}'
+    });
+    List<Track> tracks = [];
+    List<dynamic> tracksJson = json.decode(r.body);
+    for (dynamic trackJson in tracksJson) {
+      tracks.add(Track.fromJson(trackJson));
+    }
+    return tracks;
   }
 
   void fetchAccessToken() async {
@@ -108,11 +136,13 @@ class APIClient {
   }
 
   Future<bool> fetchRefreshToken(String username, String password) async {
-    http.Response r = await http.post("https://trackifyapp.net/api/login", body: {
+    http.Response r = await http.post(BACKEND + "/api/login", body: {
       'username': username,
       'password': password
     });
-    Map<String, dynamic> rJson =  json.decode(r.body)['refresh_token'];
+    if (r.statusCode != 200)
+      return false;
+    Map<String, dynamic> rJson = json.decode(r.body);
     if (!rJson.containsKey('refresh_token')) {
       return false;
     }
@@ -127,5 +157,16 @@ class APIClient {
 
   bool isAuthDone() {
     return this.accessToken != null;
+  }
+
+  /* TODO: finish this crap */
+  Future<bool> register(String username, String password, String email) async {
+    http.Response r = await http.post(BACKEND + "/api/login", body: {
+      'username': username,
+      'password': password
+    });
+    if (r.statusCode != 202)
+      return false;
+    Map<String, dynamic> rJson = json.decode(r.body)[''];
   }
 }
