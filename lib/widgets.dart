@@ -6,11 +6,18 @@ class MusicEntryWidget extends StatelessWidget {
   String imageUrl;
   String title;
   String subTitle;
+  Widget info;
 
-  MusicEntryWidget(this.imageUrl, this.title, this.subTitle);
+  MusicEntryWidget(this.imageUrl, this.title, this.subTitle, this.info);
 
   static MusicEntryWidget fromTrack(Track track) {
-    return MusicEntryWidget(track.album.imageUrl, track.name, 'artist name');
+    return MusicEntryWidget(track.album.imageUrl, track.name, track.artist.name, Column(
+      children: [
+        Text((track.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs'),
+        Text(((track.msListened / 1000 / 60) % 60).toInt().toString() + ' mins'),
+        Text(((track.msListened / 1000) % 60).toInt().toString() + ' secs'),
+      ],
+    ));
   }
 
   @override
@@ -41,7 +48,7 @@ class MusicEntryWidget extends StatelessWidget {
                       SizedBox(height: 5,),
                       Text(this.subTitle, overflow: TextOverflow.ellipsis,),
                   ])) : Text(this.title),
-              Text('time goes here')
+              this.info,
             ]
           )
         )
@@ -75,7 +82,6 @@ class RootWidgetState extends State<RootWidget> {
 
   @override
   Widget build(BuildContext context) {
-    print(10000);
     return MaterialApp(
       theme: new ThemeData(
         primaryColor: bgColor,
@@ -95,7 +101,6 @@ class RootWidgetState extends State<RootWidget> {
               return AuthWidget(widget.apiClient, this);
             }
           } else {
-            print('sldjalskdjklajsd');
             return Scaffold(
               backgroundColor: bgColor,
               body: Center(child: CircularProgressIndicator()),
@@ -136,8 +141,8 @@ class HomeWidgetState extends State<HomeWidget> {
     return HistoryWidget(apiClient);
   }
 
-  Widget leaderboard() {
-    return null;
+  Widget leaderboard(APIClient apiClient) {
+    return LeaderboardWidget(apiClient);
   }
 
   @override
@@ -163,7 +168,7 @@ class HomeWidgetState extends State<HomeWidget> {
             case 1:
               return this.history(widget.apiClient);
             case 2:
-              return this.leaderboard();
+              return this.leaderboard(widget.apiClient);
           }
         }(),
       )
@@ -181,14 +186,13 @@ class GeneralWidget extends StatelessWidget {
   Future<bool> future;
 
   GeneralWidget(this.apiClient) {
-    print(1);
     this.future = fetchData();
   }
 
   Future<bool> fetchData() async {
-    // this.topTracksThisMonth = await this.apiClient.fetchTopTracks();
-    // this.topTracksThisWeek = await this.apiClient.fetchTopTracks();
-    this.topTracksToday = await this.apiClient.fetchTopTracks();
+    this.topTracksThisMonth = await this.apiClient.fetchTopTracks(24 * 30);
+    this.topTracksThisWeek = await this.apiClient.fetchTopTracks(24 * 7);
+    this.topTracksToday = await this.apiClient.fetchTopTracks(24);
     return true;
   }
 
@@ -201,20 +205,20 @@ class GeneralWidget extends StatelessWidget {
           return Column(
             children: <Widget>[
               Column(children: [
-                Container(child: Center(child: Text('your top songs today', style: highlightedTextStyle)), height: 40,),
+                Container(child: Center(child: Text('your top song today', style: highlightedTextStyle)), height: 40,),
                 MusicEntryWidget.fromTrack(this.topTracksToday[0]),
               ]),
               SizedBox(height: 30),
               Column(children: [
-                Container(child: Center(child: Text('your top songs this week', style: highlightedTextStyle))),
+                Container(child: Center(child: Text('your top song this week', style: highlightedTextStyle))),
                 SizedBox(height: 20,),
-                MusicEntryWidget('https://images-na.ssl-images-amazon.com/images/I/61sk7OX384L.jpg', 'got your six', 'five finger death punch'),
+                MusicEntryWidget.fromTrack(this.topTracksThisWeek[0]),
               ],),
               SizedBox(height: 30),
               Column(children: [
-                Container(child: Center(child: Text('your top songs this month', style: highlightedTextStyle))),
+                Container(child: Center(child: Text('your top song this month', style: highlightedTextStyle))),
                 SizedBox(height: 20,),
-                MusicEntryWidget('https://images-na.ssl-images-amazon.com/images/I/61sk7OX384L.jpg', 'got your six', 'five finger death punch'),
+                MusicEntryWidget.fromTrack(this.topTracksThisMonth[0]),
               ],)
             ],
           );
@@ -237,17 +241,53 @@ class HistoryWidget extends StatelessWidget {
       future: this.apiClient.fetchHistory(),
       builder: (BuildContext context, AsyncSnapshot<List<Play>> snapshot) {
         if (snapshot.hasData) {
-          return ListView.builder(
+          return Scrollbar(child: ListView.builder(
             itemCount: snapshot.data.length + 1,
             itemBuilder: (BuildContext context, int index) {
               if (index == 0) {
                 return Container(child: Center(child: Text('History', style: highlightedTextStyle,)), height: 50,);
               } else {
                 Play play = snapshot.data[index - 1];
-                return MusicEntryWidget(play.track.album.imageUrl, play.track.name, play.track.name);
+                return MusicEntryWidget(play.track.album.imageUrl, play.track.name, play.track.artist.name,
+                  Column(children: [
+                    Text('${play.playTime.day}/${play.playTime.month}/${play.playTime.year}'),
+                    Text('${play.playTime.hour}:${play.playTime.minute}:${play.playTime.second}'),
+                  ])
+                );
               }
             },
-          );
+          ));
+        } else {
+          return Center(child: CircularProgressIndicator());
+        }
+      }
+    );
+  }
+
+}
+
+class LeaderboardWidget extends StatelessWidget {
+  final APIClient apiClient;
+
+  LeaderboardWidget(this.apiClient);
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<User>>(
+      future: this.apiClient.fetchTopUsers(0),
+      builder: (BuildContext context, AsyncSnapshot<List<User>> snapshot) {
+        if (snapshot.hasData) {
+          return Scrollbar(child: ListView.builder(
+            itemCount: snapshot.data.length + 1,
+            itemBuilder: (BuildContext context, int index) {
+              if (index == 0) {
+                return Container(child: Center(child: Text('Leaderboard', style: highlightedTextStyle,)), height: 50,);
+              } else {
+                User user = snapshot.data[index - 1];
+                return Text(user.username);
+              }
+            },
+          ));
         } else {
           return Center(child: CircularProgressIndicator());
         }
@@ -390,7 +430,7 @@ class LoginWidget extends StatelessWidget {
               ),
             ),
             FormButton('Login', () async {
-              // if (_formKey.currentState.validate()) {
+              if (_formKey.currentState.validate()) {
                 Scaffold.of(context).showSnackBar(
                   SnackBar(content: Text('loging in..'))
                 );
@@ -401,17 +441,12 @@ class LoginWidget extends StatelessWidget {
                 if (success) {
                   print('success in authentication');
                   this.apiClient.isAuthDone();
-                  // print('fetching history...');
-                  // final history = await this.apiClient.fetchHistory();
-                  // for (final play in history) {
-                  //   print(play.track.name);
-                  // }
                   this.onAuthDone();
                 } else
                   print('no success in authentication');
-              // } else {
-              //   print('login form not valid');
-              // }
+              } else {
+                print('login form not valid');
+              }
             }),
             SizedBox(height: 20,),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [

@@ -32,12 +32,13 @@ String validateEmailInput(String email) {
 class Track {
   String id;
   String name;
-  List<Artist> artists;
+  Artist artist;
   Album album;
   int msListened;
-  Track(this.id, this.name, this.artists, this.album, {this.msListened = 0});
+  Track(this.id, this.name, this.artist, this.album, {this.msListened = 0});
   static Track fromJson(Map<String, dynamic> jsonMap) {
-    final track = Track(jsonMap['id'].toString(), jsonMap['name'].toString(), null, Album.fromJson(jsonMap['album']));
+    final track = Track(jsonMap['id'].toString(), jsonMap['name'].toString(), Artist.fromJson(jsonMap['artist']),
+                        Album.fromJson(jsonMap['album']));
     if (jsonMap.containsKey('listened_ms'))
       track.msListened = jsonMap['listened_ms'];
     return track;
@@ -71,6 +72,15 @@ class Play {
   Play(this.id, this.track, this.playTime);
   static Play fromJson(Map<String, dynamic> jsonMap) {
     return Play(jsonMap['id'], Track.fromJson(jsonMap['track']), DateTime.parse(jsonMap['play_time']));
+  }
+}
+
+class User {
+  String username;
+  int msListened;
+  User(this.username, this.msListened);
+  static User fromJson(Map<String, dynamic> jsonMap) {
+    return User(jsonMap['username'], jsonMap['listened_ms']);
   }
 }
 
@@ -112,9 +122,8 @@ class APIClient {
     return plays;
   }
 
-  Future<List<Track>> fetchTopTracks() async {
-    print('fetch top tracks called');
-    http.Response r = await http.get(BACKEND + '/api/top_tracks?hrs_limit=0', headers: {
+  Future<List<Track>> fetchTopTracks(int hrsLimit) async {
+    http.Response r = await http.get(BACKEND + '/api/top_tracks?hrs_limit=' + hrsLimit.toString(), headers: {
       'Authorization': 'Bearer ${this.accessToken}'
     });
     List<Track> tracks = [];
@@ -125,10 +134,22 @@ class APIClient {
     return tracks;
   }
 
+  Future<List<User>> fetchTopUsers(int hrsLimit) async {
+    http.Response r = await http.get(BACKEND + '/api/top_users?hrs_limit=' + hrsLimit.toString(), headers: {
+      'Authorization': 'Bearer ${this.accessToken}'
+    });
+    List<User> users = [];
+    List<dynamic> usersJson = json.decode(r.body);
+    for (dynamic userJson in usersJson) {
+      users.add(User.fromJson(userJson));
+    }
+    return users;
+  }
+
   void fetchAccessToken() async {
     /* fetch it here */
     this.accessTokenExpiryTime =
-      new DateTime.now().millisecondsSinceEpoch + 30 * 60 * 1000;
+      new DateTime.now().millisecondsSinceEpoch + 30 * 60 * 1000; // after 30 minutes
   }
 
   Future<bool> authenticate(String username, String password) async {
@@ -159,14 +180,14 @@ class APIClient {
     return this.accessToken != null;
   }
 
-  /* TODO: finish this crap */
+  /* TODO: finish this */
   Future<bool> register(String username, String password, String email) async {
-    http.Response r = await http.post(BACKEND + "/api/login", body: {
-      'username': username,
-      'password': password
-    });
-    if (r.statusCode != 202)
-      return false;
-    Map<String, dynamic> rJson = json.decode(r.body)[''];
+    // http.Response r = await http.post(BACKEND + "/api/login", body: {
+    //   'username': username,
+    //   'password': password
+    // });
+    // if (r.statusCode != 202)
+    //   return false;
+    // Map<String, dynamic> rJson = json.decode(r.body)[''];
   }
 }
