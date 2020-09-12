@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-const String BACKEND = 'http://localhost:5000';
+// const String BACKEND = 'http://localhost:5000';
+const String BACKEND = 'http://108.61.211.163';
 
 String validatePasswordInput(String password) {
   if (password.isEmpty)
@@ -100,7 +101,6 @@ class APIClient {
       this.refreshToken = accessValues['refresh_token'];
       this.accessTokenExpiryTime = int.parse(accessValues['expiry_time']);
     }
-    print('done init');
   }
 
   void fetchNewAccessTokenIfNeeded() {
@@ -110,8 +110,8 @@ class APIClient {
     }
   }
 
-  Future<List<Play>> fetchHistory() async {
-    http.Response r = await http.get(BACKEND + '/api/history', headers: {
+  Future<List<Play>> fetchHistory(int hrsLimit) async {
+    http.Response r = await http.get(BACKEND + '/api/history?hrs_limit=' + hrsLimit.toString(), headers: {
       'Authorization': 'Bearer ${this.accessToken}'
     });
     List<Play> plays = [];
@@ -161,6 +161,7 @@ class APIClient {
       'username': username,
       'password': password
     });
+    print(r.body);
     if (r.statusCode != 200)
       return false;
     Map<String, dynamic> rJson = json.decode(r.body);

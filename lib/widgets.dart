@@ -23,7 +23,7 @@ class MusicEntryWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: EdgeInsets.fromLTRB(21, 5, 20, 5),
+      margin: EdgeInsets.fromLTRB(20, 5, 20, 5),
       color: dimmerBgColor,
       child: Row(children: <Widget>[
         Container(
@@ -238,7 +238,7 @@ class HistoryWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Play>>(
-      future: this.apiClient.fetchHistory(),
+      future: this.apiClient.fetchHistory(24 * 7),
       builder: (BuildContext context, AsyncSnapshot<List<Play>> snapshot) {
         if (snapshot.hasData) {
           return Scrollbar(child: ListView.builder(
@@ -250,8 +250,8 @@ class HistoryWidget extends StatelessWidget {
                 Play play = snapshot.data[index - 1];
                 return MusicEntryWidget(play.track.album.imageUrl, play.track.name, play.track.artist.name,
                   Column(children: [
-                    Text('${play.playTime.day}/${play.playTime.month}/${play.playTime.year}'),
                     Text('${play.playTime.hour}:${play.playTime.minute}:${play.playTime.second}'),
+                    Text('${play.playTime.day}/${play.playTime.month}/${play.playTime.year}'),
                   ])
                 );
               }
@@ -278,14 +278,29 @@ class LeaderboardWidget extends StatelessWidget {
       builder: (BuildContext context, AsyncSnapshot<List<User>> snapshot) {
         if (snapshot.hasData) {
           return Scrollbar(child: ListView.builder(
-            itemCount: snapshot.data.length + 1,
+            itemCount: snapshot.data.length,
             itemBuilder: (BuildContext context, int index) {
-              if (index == 0) {
-                return Container(child: Center(child: Text('Leaderboard', style: highlightedTextStyle,)), height: 50,);
-              } else {
-                User user = snapshot.data[index - 1];
-                return Text(user.username);
-              }
+              User user = snapshot.data[index];
+              return Container(child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Container(
+                      child: Text(user.username, overflow: TextOverflow.ellipsis, style: highlightedTextStyle,),
+                      margin: EdgeInsets.all(5),
+                    ),
+                  ),
+                  Container(child:
+                    Column(
+                      children: [
+                        Text((user.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs', style: textStyle,),
+                        Text(((user.msListened / 1000 / 60) % 60).toInt().toString() + ' mins', style: textStyle,),
+                        Text(((user.msListened / 1000) % 60).toInt().toString() + ' secs', style: textStyle,),
+                      ]
+                    ), margin: EdgeInsets.all(5)
+                  )
+                ]
+              ), color: Colors.black, margin: EdgeInsets.fromLTRB(10, 5, 10, 5), height: 70,);
             },
           ));
         } else {
@@ -332,38 +347,128 @@ class RegisterWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    FormTextField usernameField = FormTextField('enter username', validateUsernameInput);
-    FormTextField passwordField = FormTextField('enter password', validatePasswordInput, isPassword: true);
-    FormTextField emailField = FormTextField('enter email', validateEmailInput);
+    final TextEditingController usernameController = TextEditingController();
+    final TextEditingController passwordController = TextEditingController();
+    final TextEditingController emailController = TextEditingController();
     return Form(
       key: _formKey,
-      child: Scaffold(
+      child: SafeArea(child: Scaffold(
         backgroundColor: bgColor,
-        body: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        body: Container(child: ListView(
           children: <Widget>[
-            usernameField,
-            passwordField,
-            FormTextField('confirm password', (password) {
-              if (password != passwordField.getText())
-                return 'passwords dont match';
-              return null;
-            }, isPassword: true),
-            emailField,
-            FormButton('Register', () async {
+            TextFormField(
+              validator: (String username) {
+                return validateUsernameInput(username);
+              },
+              controller: usernameController,
+              style: TextStyle(color: textColor),
+              decoration: InputDecoration(
+                hintText: 'enter username',
+                hintStyle: TextStyle(color: dimmerBgColor),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: highlightedTextColor)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.white),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.red),
+                ),
+              ),
+            ),
+            SizedBox(height: 20),
+            TextFormField(
+              validator: (String password) {
+                return validatePasswordInput(password);
+              },
+              obscureText: true,
+              controller: passwordController,
+              style: TextStyle(color: textColor),
+              decoration: InputDecoration(
+                hintText: 'enter password',
+                hintStyle: TextStyle(color: dimmerBgColor),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: highlightedTextColor)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.white),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.red),
+                ),
+              ),
+            ),
+            SizedBox(height: 20),
+            TextFormField(
+              validator: (String confirmationPassword) {
+                if (passwordController.text != confirmationPassword) {
+                  return 'passwords dont match';
+                }
+                return null;
+              },
+              obscureText: true,
+              style: TextStyle(color: textColor),
+              decoration: InputDecoration(
+                hintText: 'confirm password',
+                hintStyle: TextStyle(color: dimmerBgColor),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: highlightedTextColor)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.white),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.red),
+                ),
+              ),
+            ),
+            SizedBox(height: 20),
+            TextFormField(
+              validator: (String email) {
+                return validateEmailInput(email);
+              },
+              style: TextStyle(color: textColor),
+              decoration: InputDecoration(
+                hintText: 'enter email',
+                hintStyle: TextStyle(color: dimmerBgColor),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: highlightedTextColor)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.white),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.red),
+                ),
+              ),
+            ),
+            SizedBox(height: 20),
+            Align(child: FormButton('Register', () async {
               if (_formKey.currentState.validate()) {
                 Scaffold.of(context).showSnackBar(
                   SnackBar(content: Text('communicating with server..'))
                 );
-                bool success = await this.apiClient.register(usernameField.getText(),
-                                                             passwordField.getText(),
-                                                             emailField.getText());
+                bool success = await this.apiClient.register(usernameController.text,
+                                                             passwordController.text,
+                                                             emailController.text);
                 if (success)
                   print('success in registeration');
                 else
                   print('no success in registeration');
               }
-            }),
+            }), alignment: Alignment.center,),
             SizedBox(height: 20,),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Text('already have an account?', style: highlightedTextStyle),
@@ -373,8 +478,8 @@ class RegisterWidget extends StatelessWidget {
               }, child: Text('login'))
             ],)
           ],
-        ),
-      ),
+        ), margin: EdgeInsets.all(20),),
+      )),
     );
   }
 }
@@ -391,12 +496,11 @@ class LoginWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return SafeArea(child: Scaffold(
       backgroundColor: bgColor,
       body: Form(
         key: _formKey,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Container(child: ListView(
           children: <Widget>[
             TextFormField(
               validator: (String username) {
@@ -409,7 +513,16 @@ class LoginWidget extends StatelessWidget {
                 hintStyle: TextStyle(color: dimmerBgColor),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
-                  borderSide: BorderSide(color: highlightedTextColor)),
+                  borderSide: BorderSide(color: highlightedTextColor)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.white),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.red),
+                ),
               ),
             ),
             SizedBox(height: 20,),
@@ -427,16 +540,25 @@ class LoginWidget extends StatelessWidget {
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
                   borderSide: BorderSide(color: highlightedTextColor)
                 ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.white),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5.0)),
+                  borderSide: BorderSide(color: Colors.red),
+                ),
               ),
             ),
-            FormButton('Login', () async {
-              if (_formKey.currentState.validate()) {
+            SizedBox(height: 20,),
+            Align(child: FormButton('Login', () async {
+              // if (_formKey.currentState.validate()) {
                 Scaffold.of(context).showSnackBar(
                   SnackBar(content: Text('loging in..'))
                 );
                 // bool success = await this.apiClient.authenticate(usernameController.text,
                 //                                                  passwordController.text);
-                bool success = await this.apiClient.authenticate('devilspawn',
+                bool success = await this.apiClient.authenticate('mahmoodsheikh36',
                                                                  'lion1230');
                 if (success) {
                   print('success in authentication');
@@ -444,10 +566,10 @@ class LoginWidget extends StatelessWidget {
                   this.onAuthDone();
                 } else
                   print('no success in authentication');
-              } else {
-                print('login form not valid');
-              }
-            }),
+              // } else {
+              //   print('login form not valid');
+              // }
+            }), alignment: Alignment.center,),
             SizedBox(height: 20,),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Text('dont have an account?', style: highlightedTextStyle,),
@@ -457,9 +579,9 @@ class LoginWidget extends StatelessWidget {
               }, child: Text('register'))
             ],)
           ],
-        ),
+        ), margin: EdgeInsets.all(20),),
       ),
-    );
+    ));
   }
 }
 
@@ -503,7 +625,16 @@ class FormTextFieldState extends State<FormTextField> {
           hintStyle: TextStyle(color: dimmerBgColor),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(5.0)),
-            borderSide: BorderSide(color: highlightedTextColor)),
+            borderSide: BorderSide(color: highlightedTextColor)
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(5.0)),
+            borderSide: BorderSide(color: Colors.white),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(5.0)),
+            borderSide: BorderSide(color: Colors.red),
+          ),
         ),
       ),
     );
