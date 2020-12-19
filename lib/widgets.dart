@@ -1,17 +1,85 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:trackify_android/colors.dart';
+import 'package:flutter/rendering.dart';
+
+import 'package:trackify_android/config.dart';
 import 'package:trackify_android/api.dart';
 
-class MusicEntryWidget extends StatelessWidget {
+var horizontalExampleWidget = HorizontalMusicEntryWidget(
+  'https://i.scdn.co/image/ab67616d00004851572f05af2c4a51eaf9117d76',
+  'track title',
+  'artist name',
+  null
+);
+
+var verticalExampleWidget = VerticalMusicEntryWidget(
+  'https://i.scdn.co/image/ab67616d00004851572f05af2c4a51eaf9117d76',
+  'track title',
+  'artist name',
+  '3 hrs, 18 mins, 50 secs'
+);
+
+class VerticalMusicEntryWidget extends StatelessWidget {
+  String imageUrl;
+  String title;
+  String subTitle;
+  String info;
+
+  VerticalMusicEntryWidget(this.imageUrl, this.title, this.subTitle, this.info);
+
+  static VerticalMusicEntryWidget fromTrack(Track track) {
+    return VerticalMusicEntryWidget(track.album.imageUrl, track.name, track.artist.name,
+        (track.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs ' +
+        ((track.msListened / 1000 / 60) % 60).toInt().toString() + ' mins ' +
+        ((track.msListened / 1000) % 60).toInt().toString() + ' secs'
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(child: Container(
+      margin: const EdgeInsets.all(4),
+      child: Column(children: <Widget>[
+        Container(
+          child: Image.network(
+            this.imageUrl,
+            width: 130,
+            height: 130,
+            fit: BoxFit.contain,
+          )
+        ),
+        SizedBox(height: 5),
+        Expanded(
+          child: Column(
+            children: [
+              this.subTitle != null
+                ? Flexible(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: <Widget>[
+                      Text(this.title, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainRed)),
+                      Text(this.subTitle, overflow: TextOverflow.ellipsis, style: TextStyle(color: secondaryBlack)),
+                      if (this.info != null) Text(this.info, style: TextStyle(color: secondaryBlack, fontSize: 12)),
+                  ])) : Text(this.title),
+            ]
+          )
+        )
+      ], crossAxisAlignment: CrossAxisAlignment.start,),
+      width: 140,
+    ), borderRadius: BorderRadius.circular(7),);
+  }
+}
+
+class HorizontalMusicEntryWidget extends StatelessWidget {
   String imageUrl;
   String title;
   String subTitle;
   Widget info;
 
-  MusicEntryWidget(this.imageUrl, this.title, this.subTitle, this.info);
+  HorizontalMusicEntryWidget(this.imageUrl, this.title, this.subTitle, this.info);
 
-  static MusicEntryWidget fromTrack(Track track) {
-    return MusicEntryWidget(track.album.imageUrl, track.name, track.artist.name, Column(
+  static HorizontalMusicEntryWidget fromTrack(Track track) {
+    return HorizontalMusicEntryWidget(track.album.imageUrl, track.name, track.artist.name, Column(
       children: [
         Text((track.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs'),
         Text(((track.msListened / 1000 / 60) % 60).toInt().toString() + ' mins'),
@@ -22,16 +90,15 @@ class MusicEntryWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.fromLTRB(20, 5, 20, 5),
-      color: dimmerBgColor,
+    return ClipRRect(child: Container(
+      color: Color.fromRGBO(17, 17, 17, 0.65),
       child: Row(children: <Widget>[
         Container(
           margin: const EdgeInsets.all(4),
           child: Image.network(
             this.imageUrl,
-            width: 55,
-            height: 55,
+            width: 45,
+            height: 45,
             fit: BoxFit.contain,
           )
         ),
@@ -44,16 +111,16 @@ class MusicEntryWidget extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: <Widget>[
-                      Text(this.title, overflow: TextOverflow.ellipsis,),
+                      Text(this.title, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainRed)),
                       SizedBox(height: 5,),
-                      Text(this.subTitle, overflow: TextOverflow.ellipsis,),
+                      Text(this.subTitle, overflow: TextOverflow.ellipsis, style: TextStyle(color: secondaryBlack)),
                   ])) : Text(this.title),
-              this.info,
+              if (this.info != null) this.info,
             ]
           )
         )
       ]),
-    );
+    ), borderRadius: BorderRadius.circular(7),);
   }
 }
 
@@ -71,7 +138,7 @@ class RootWidgetState extends State<RootWidget> {
 
   Future<bool> init() async {
     await widget.apiClient.init();
-    return true; 
+    return true;
   }
 
   @override
@@ -84,7 +151,7 @@ class RootWidgetState extends State<RootWidget> {
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: new ThemeData(
-        primaryColor: bgColor,
+        primaryColor: mainBlack,
         primaryTextTheme: TextTheme(
           title: TextStyle(
             color: textColor,
@@ -102,7 +169,7 @@ class RootWidgetState extends State<RootWidget> {
             }
           } else {
             return Scaffold(
-              backgroundColor: bgColor,
+              backgroundColor: mainBlack,
               body: Center(child: CircularProgressIndicator()),
             );
           }
@@ -118,59 +185,72 @@ class HomeWidget extends StatefulWidget {
 
   HomeWidget(this.apiClient, this.rootWidgetState);
   
-
   @override
-  State<StatefulWidget> createState() => HomeWidgetState();
-
+  State<StatefulWidget> createState() => HomeWidgetState(this.apiClient);
 }
 
 class HomeWidgetState extends State<HomeWidget> {
-  int bottomNavigationBarIndex = 0;
+  int _bottomNavigationBarIndex = 0;
+  PageController _pageController;
+  Widget _generalWidget;
+  Widget _historyWidget;
+  Widget _leaderboardWidget;
+
+  HomeWidgetState(APIClient apiClient) {
+    _generalWidget = GeneralWidget(apiClient);
+    _historyWidget = HistoryWidget(apiClient);
+    _leaderboardWidget = LeaderboardWidget(apiClient);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   void bottomNavigationBarOnTap(int index) {
     setState(() {
-      bottomNavigationBarIndex = index;
+      _pageController.animateToPage(index,
+        duration: Duration(milliseconds: 500), curve: Curves.easeOut);
+      _bottomNavigationBarIndex = index;
     });
-  }
-
-  Widget general(APIClient apiClient) {
-    return GeneralWidget(apiClient);
-  }
-
-  Widget history(APIClient apiClient) {
-    return HistoryWidget(apiClient);
-  }
-
-  Widget leaderboard(APIClient apiClient) {
-    return LeaderboardWidget(apiClient);
   }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor: mainBlack,
         bottomNavigationBar: BottomNavigationBar(
-          selectedItemColor: highlightedTextColor,
-          unselectedItemColor: dimmerBgColor,
-          backgroundColor: bgColor, items: [
+          selectedItemColor: mainRed,
+          unselectedItemColor: secondaryBlack,
+          backgroundColor: mainBlack, items: [
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'General'),
             BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
             BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
           ],
           onTap: this.bottomNavigationBarOnTap,
-          currentIndex: this.bottomNavigationBarIndex,
+          currentIndex: this._bottomNavigationBarIndex,
         ),
-        body: () {
-          switch (this.bottomNavigationBarIndex) {
-            case 0:
-              return this.general(widget.apiClient);
-            case 1:
-              return this.history(widget.apiClient);
-            case 2:
-              return this.leaderboard(widget.apiClient);
-          }
-        }(),
+        body: SizedBox.expand(
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() => _bottomNavigationBarIndex = index);
+            },
+            children: <Widget>[
+              _generalWidget,
+              _historyWidget,
+              _leaderboardWidget,
+            ],
+          ),
+        ),
       )
     );
   }
@@ -190,9 +270,10 @@ class GeneralWidget extends StatelessWidget {
   }
 
   Future<bool> fetchData() async {
-    this.topTracksThisMonth = await this.apiClient.fetchTopTracks(24 * 30);
-    this.topTracksThisWeek = await this.apiClient.fetchTopTracks(24 * 7);
-    this.topTracksToday = await this.apiClient.fetchTopTracks(24);
+    Map<int, List<Track>> topTracks = await this.apiClient.fetchTopTracks([24, 24 * 7, 24 * 30]);;
+    this.topTracksThisMonth = topTracks[24 * 30];
+    this.topTracksThisWeek = topTracks[24 * 7];
+    this.topTracksToday = topTracks[24];
     return true;
   }
 
@@ -202,26 +283,84 @@ class GeneralWidget extends StatelessWidget {
       future: this.future,
       builder: (BuildContext context, AsyncSnapshot snapshot) {
         if (snapshot.hasData) {
-          return Column(
+          return SingleChildScrollView(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Column(children: [
-                Container(child: Center(child: Text('your top song today', style: highlightedTextStyle)), height: 40,),
-                MusicEntryWidget.fromTrack(this.topTracksToday[0]),
-              ]),
-              SizedBox(height: 30),
-              Column(children: [
-                Container(child: Center(child: Text('your top song this week', style: highlightedTextStyle))),
-                SizedBox(height: 20,),
-                MusicEntryWidget.fromTrack(this.topTracksThisWeek[0]),
-              ],),
-              SizedBox(height: 30),
-              Column(children: [
-                Container(child: Center(child: Text('your top song this month', style: highlightedTextStyle))),
-                SizedBox(height: 20,),
-                MusicEntryWidget.fromTrack(this.topTracksThisMonth[0]),
-              ],)
+              //Column(children: <Widget>[
+              //  Container(child: Center(child: Text('your top song today', style: highlightedTextStyle)), height: 40,),
+              //  if (this.topTracksToday != null) MusicEntryWidget.fromTrack(this.topTracksToday[0]),
+              //]),
+              //SizedBox(height: 30),
+              //Column(children: <Widget>[
+              //  Container(child: Center(child: Text('your top song this week', style: highlightedTextStyle))),
+              //  SizedBox(height: 20,),
+              //  if (this.topTracksThisWeek != null) MusicEntryWidget.fromTrack(this.topTracksThisWeek[0]),
+              //]),
+              //SizedBox(height: 30),
+              //Column(children: <Widget>[
+              //  Container(child: Center(child: Text('your top song this month', style: highlightedTextStyle))),
+              //  SizedBox(height: 20,),
+              //  if (this.topTracksThisMonth != null) MusicEntryWidget.fromTrack(this.topTracksThisMonth[0]),
+              //]),
+              Container(
+                child: Text('Good day', style: TextStyle(color: mainRed, fontSize: 25)),
+                padding: EdgeInsets.all(15),
+              ),
+              Container(child: Row(
+                children: [
+                  Expanded(child: horizontalExampleWidget),
+                  SizedBox(width: 5),
+                  Expanded(child: horizontalExampleWidget),
+                ],
+              ), padding: EdgeInsets.fromLTRB(10, 0, 10, 5)),
+              Container(child: Row(
+                children: [
+                  Expanded(child: horizontalExampleWidget),
+                  SizedBox(width: 5),
+                  Expanded(child: horizontalExampleWidget),
+                ],
+              ), padding: EdgeInsets.fromLTRB(10, 0, 10, 5)),
+              if (this.topTracksToday != null) Container(
+                child: Text('Top tracks today', style: TextStyle(color: mainRed, fontSize: 25)),
+                padding: EdgeInsets.all(15),
+              ),
+              if (this.topTracksToday != null) Container(child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (Track track in this.topTracksToday) Container(
+                    child: VerticalMusicEntryWidget.fromTrack(track),
+                    padding: EdgeInsets.fromLTRB(10, 0, 10, 5),
+                  ),
+                ],
+              ), height: 200),
+              if (this.topTracksThisWeek != null) Container(
+                child: Text('Top tracks this week', style: TextStyle(color: mainRed, fontSize: 25)),
+                padding: EdgeInsets.all(15),
+              ),
+              if (this.topTracksThisWeek != null) Container(child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (Track track in this.topTracksThisWeek) Container(
+                    child: VerticalMusicEntryWidget.fromTrack(track),
+                    padding: EdgeInsets.fromLTRB(10, 0, 10, 5),
+                  ),
+                ],
+              ), height: 200),
+              if (this.topTracksThisMonth != null) Container(
+                child: Text('Top tracks this month', style: TextStyle(color: mainRed, fontSize: 25)),
+                padding: EdgeInsets.all(15),
+              ),
+              if (this.topTracksThisMonth != null) Container(child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (Track track in this.topTracksThisMonth) Container(
+                    child: VerticalMusicEntryWidget.fromTrack(track),
+                    padding: EdgeInsets.fromLTRB(10, 0, 10, 5),
+                  ),
+                ],
+              ), height: 200),
             ],
-          );
+          ));
         } else {
           return Center(child: CircularProgressIndicator());
         }
@@ -248,7 +387,7 @@ class HistoryWidget extends StatelessWidget {
                 return Container(child: Center(child: Text('History', style: highlightedTextStyle,)), height: 50,);
               } else {
                 Play play = snapshot.data[index - 1];
-                return MusicEntryWidget(play.track.album.imageUrl, play.track.name, play.track.artist.name,
+                return HorizontalMusicEntryWidget(play.track.album.imageUrl, play.track.name, play.track.artist.name,
                   Column(children: [
                     Text('${play.playTime.hour}:${play.playTime.minute}:${play.playTime.second}'),
                     Text('${play.playTime.day}/${play.playTime.month}/${play.playTime.year}'),
@@ -278,30 +417,45 @@ class LeaderboardWidget extends StatelessWidget {
       builder: (BuildContext context, AsyncSnapshot<List<User>> snapshot) {
         if (snapshot.hasData) {
           return Scrollbar(child: ListView.builder(
-            itemCount: snapshot.data.length,
+            itemCount: snapshot.data.length  + 1,
             itemBuilder: (BuildContext context, int index) {
-              User user = snapshot.data[index];
-              return Container(child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    child: Container(
-                      child: Text(user.username, overflow: TextOverflow.ellipsis, style: highlightedTextStyle,),
-                      margin: EdgeInsets.all(5),
-                    ),
-                  ),
-                  Container(child:
-                    Column(
-                      children: [
-                        Text((user.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs', style: textStyle,),
-                        Text(((user.msListened / 1000 / 60) % 60).toInt().toString() + ' mins', style: textStyle,),
-                        Text(((user.msListened / 1000) % 60).toInt().toString() + ' secs', style: textStyle,),
-                      ]
-                    ), margin: EdgeInsets.all(5)
+              if (index == 0) {
+                return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  DropdownButton(
+                    value: 'past day',
+                    items: <String>['past day', 'past week', 'past month'].map((String value) {
+                      return new DropdownMenuItem<String>(
+                        value: value,
+                        child: new Text(value),
+                      );
+                    }).toList(),
+                    onChanged: null
                   )
-                ]
-              ), color: Colors.black, margin: EdgeInsets.fromLTRB(10, 5, 10, 5), height: 70,);
-            },
+                ]);
+              } else {
+                User user = snapshot.data[index - 1];
+                return Container(child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Container(
+                        child: Text(user.username, overflow: TextOverflow.ellipsis, style: highlightedTextStyle,),
+                        margin: EdgeInsets.all(5),
+                      ),
+                    ),
+                    Container(child:
+                      Column(
+                        children: [
+                          Text((user.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs', style: textStyle,),
+                          Text(((user.msListened / 1000 / 60) % 60).toInt().toString() + ' mins', style: textStyle,),
+                          Text(((user.msListened / 1000) % 60).toInt().toString() + ' secs', style: textStyle,),
+                        ]
+                      ), margin: EdgeInsets.all(5)
+                    )
+                  ]
+                ), color: Colors.black, margin: EdgeInsets.fromLTRB(10, 5, 10, 5), height: 70);
+              }
+            }
           ));
         } else {
           return Center(child: CircularProgressIndicator());
@@ -309,7 +463,6 @@ class LeaderboardWidget extends StatelessWidget {
       }
     );
   }
-
 }
 
 class AuthWidget extends StatefulWidget {
@@ -328,6 +481,21 @@ class AuthWidgetState extends State<AuthWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (USERNAME != null && PASSWORD != null && kDebugMode) {
+      return FutureBuilder(
+        future: () async {
+          await widget.apiClient.authenticate(USERNAME, PASSWORD);
+          if (widget.apiClient.isAuthDone()) {
+            widget.rootWidgetState.setState(() { });
+          } else {
+            throw new Exception("couldnt authenticate with username/password that were set in config.dart");
+          }
+        }(),
+        builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
+          return Center(child: CircularProgressIndicator(backgroundColor: mainRed,));
+        }
+      );
+    }
     return Scaffold(body: registerNotLogin ? RegisterWidget(widget.apiClient, this) :
       LoginWidget(widget.apiClient, this, () { widget.rootWidgetState.setState(() { }); }));
     // if (registerNotLogin)
@@ -353,7 +521,7 @@ class RegisterWidget extends StatelessWidget {
     return Form(
       key: _formKey,
       child: SafeArea(child: Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor: mainBlack,
         body: Container(child: ListView(
           children: <Widget>[
             TextFormField(
@@ -364,10 +532,10 @@ class RegisterWidget extends StatelessWidget {
               style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 hintText: 'enter username',
-                hintStyle: TextStyle(color: dimmerBgColor),
+                hintStyle: TextStyle(color: secondaryBlack),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
-                  borderSide: BorderSide(color: highlightedTextColor)
+                  borderSide: BorderSide(color: mainRed)
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
@@ -389,10 +557,10 @@ class RegisterWidget extends StatelessWidget {
               style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 hintText: 'enter password',
-                hintStyle: TextStyle(color: dimmerBgColor),
+                hintStyle: TextStyle(color: secondaryBlack),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
-                  borderSide: BorderSide(color: highlightedTextColor)
+                  borderSide: BorderSide(color: mainRed)
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
@@ -416,10 +584,10 @@ class RegisterWidget extends StatelessWidget {
               style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 hintText: 'confirm password',
-                hintStyle: TextStyle(color: dimmerBgColor),
+                hintStyle: TextStyle(color: secondaryBlack),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
-                  borderSide: BorderSide(color: highlightedTextColor)
+                  borderSide: BorderSide(color: mainRed)
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
@@ -439,10 +607,10 @@ class RegisterWidget extends StatelessWidget {
               style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 hintText: 'enter email',
-                hintStyle: TextStyle(color: dimmerBgColor),
+                hintStyle: TextStyle(color: secondaryBlack),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
-                  borderSide: BorderSide(color: highlightedTextColor)
+                  borderSide: BorderSide(color: mainRed)
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
@@ -497,7 +665,7 @@ class LoginWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(child: Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: mainBlack,
       body: Form(
         key: _formKey,
         child: Container(child: ListView(
@@ -510,10 +678,10 @@ class LoginWidget extends StatelessWidget {
               style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 hintText: 'enter username',
-                hintStyle: TextStyle(color: dimmerBgColor),
+                hintStyle: TextStyle(color: secondaryBlack),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
-                  borderSide: BorderSide(color: highlightedTextColor)
+                  borderSide: BorderSide(color: mainRed)
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
@@ -535,10 +703,10 @@ class LoginWidget extends StatelessWidget {
               style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 hintText: 'enter password',
-                hintStyle: TextStyle(color: dimmerBgColor),
+                hintStyle: TextStyle(color: secondaryBlack),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
-                  borderSide: BorderSide(color: highlightedTextColor)
+                  borderSide: BorderSide(color: mainRed)
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(5.0)),
@@ -552,23 +720,21 @@ class LoginWidget extends StatelessWidget {
             ),
             SizedBox(height: 20,),
             Align(child: FormButton('Login', () async {
-              // if (_formKey.currentState.validate()) {
+              if (_formKey.currentState.validate()) {
                 Scaffold.of(context).showSnackBar(
-                  SnackBar(content: Text('loging in..'))
+                  SnackBar(content: Text('logging in..'))
                 );
-                // bool success = await this.apiClient.authenticate(usernameController.text,
-                //                                                  passwordController.text);
-                bool success = await this.apiClient.authenticate('mahmoodsheikh36',
-                                                                 'lion1230');
+                bool success = await this.apiClient.authenticate(usernameController.text,
+                                                                  passwordController.text);
                 if (success) {
-                  print('success in authentication');
                   this.apiClient.isAuthDone();
                   this.onAuthDone();
-                } else
+                } else {
                   print('no success in authentication');
-              // } else {
-              //   print('login form not valid');
-              // }
+                }
+              } else {
+                print('login form not valid');
+              }
             }), alignment: Alignment.center,),
             SizedBox(height: 20,),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -622,10 +788,10 @@ class FormTextFieldState extends State<FormTextField> {
         style: TextStyle(color: textColor),
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: TextStyle(color: dimmerBgColor),
+          hintStyle: TextStyle(color: secondaryBlack),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(5.0)),
-            borderSide: BorderSide(color: highlightedTextColor)
+            borderSide: BorderSide(color: mainRed)
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(5.0)),
@@ -655,8 +821,8 @@ class FormButton extends StatelessWidget {
         this.text,
         style: TextStyle(fontSize: 20)
       ),
-      color: dimmerBgColor,
-      splashColor: highlightedTextColor,
+      color: secondaryBlack,
+      splashColor: mainRed,
     );
   }
 }
