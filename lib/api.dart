@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -39,16 +40,33 @@ String validateEmailInput(String email) {
 class Track {
   String id;
   String name;
-  Artist artist;
+  List<Artist> artists;
   Album album;
-  int msListened;
-  Track(this.id, this.name, this.artist, this.album, {this.msListened = 0});
-  static Track fromJson(Map<String, dynamic> jsonMap) {
-    final track = Track(jsonMap['id'].toString(), jsonMap['name'].toString(), Artist.fromJson(jsonMap['artist']),
-                        Album.fromJson(jsonMap['album']));
-    if (jsonMap.containsKey('listened_ms'))
-      track.msListened = jsonMap['listened_ms'];
+  List<Play> plays;
+  Track(this.id, this.name, this.artists, this.album, this.plays);
+
+  static Track fromMap(Map<String, dynamic> map) {
+    Track track = Track(map['id'], map['name'], [], Album.fromMap(map['album']), []);
+    for (Map<String, dynamic> artistJson in map['artists']) {
+      track.artists.add(Artist.fromMap(artistJson));
+    }
     return track;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': this.id,
+      'name': this.name,
+      'album_id': this.album.id,
+    };
+  }
+
+  int msPlayed({int fromTime=-1, int toTime=-1}) {
+    int total = 0;
+    for (Play play in this.plays) {
+      total += play.msPlayed(fromTime: fromTime, toTime: toTime);
+    }
+    return total;
   }
 }
 
@@ -56,8 +74,16 @@ class Artist {
   String id;
   String name;
   Artist(this.id, this.name);
-  static Artist fromJson(Map<String, dynamic> jsonMap) {
-    return Artist(jsonMap['id'], jsonMap['name']);
+
+  static Artist fromMap(Map<String, dynamic> map) {
+    return Artist(map['id'], map['name']);
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': this.id,
+      'name': this.name,
+    };
   }
 }
 
@@ -65,29 +91,180 @@ class Album {
   String id;
   String name;
   List<Artist> artists;
-  String imageUrl;
-  Album(this.id, this.name, this.artists, this.imageUrl);
-  static Album fromJson(Map<String, dynamic> jsonMap) {
-    return Album(jsonMap['id'].toString(), jsonMap['name'].toString(), null, jsonMap['cover'].toString());
+  List<AlbumCover> covers;
+  Album(this.id, this.name, this.artists, this.covers);
+
+  static Album fromMap(Map<String, dynamic> map) {
+    Album album = Album(map['id'], map['name'], [], []);
+    for (Map<String, dynamic> albumCoverMap in map['covers']) {
+      album.covers.add(AlbumCover.fromMap(albumCoverMap));
+    }
+    for (Map<String, dynamic> artistMap in map['artists']) {
+      album.artists.add(Artist.fromMap(artistMap));
+    }
+    return album;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': this.id,
+      'album_name': this.name,
+    };
+  }
+}
+
+class AlbumCover {
+  String url;
+  int width;
+  int height;
+  AlbumCover(this.url, this.width, this.height);
+
+  static AlbumCover fromMap(Map<String, dynamic> map) {
+    return AlbumCover(map['url'], map['width'], map['height']);
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'url': this.url,
+      'width': this.width,
+      'height': this.height,
+    };
   }
 }
 
 class Play {
   String id;
   Track track;
-  DateTime playTime;
-  Play(this.id, this.track, this.playTime);
-  static Play fromJson(Map<String, dynamic> jsonMap) {
-    return Play(jsonMap['id'], Track.fromJson(jsonMap['track']), DateTime.parse(jsonMap['play_time']));
+  int timeStarted;
+  int timeEnded;
+  List<Pause> pauses;
+  List<Resume> resumes;
+
+  Play(this.id, this.track, this.timeStarted, this.timeEnded, this.pauses, this.resumes);
+
+  DateTime startDateTime() {
+    return DateTime.fromMillisecondsSinceEpoch(this.timeStarted);
+  }
+
+  static Play fromMap(Map<String, dynamic> map) {
+    Play play = Play(map['id'], Track.fromMap(map['track']), map['time_started'],
+                     map['time_ended'], [], []);
+    for (Map<String, dynamic> pauseMap in map['pauses']) {
+      play.pauses.add(Pause.fromMap(pauseMap));
+    }
+    for (Map<String, dynamic> resumeMap in map['resumes']) {
+      play.resumes.add(Resume.fromMap(resumeMap));
+    }
+    return play;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': this.id,
+      'time_started': this.timeStarted,
+      'time_ended': this.timeEnded,
+      'track_id': track.id,
+    };
+  }
+
+  int msPlayed({int fromTime=-1, int toTime=-1}) {
+    if (fromTime == -1) {
+      fromTime = this.timeStarted;
+    } else if (fromTime > this.timeEnded) {
+      return 0;
+    }
+    if (toTime == -1) {
+      toTime = this.timeEnded;
+    } else if (toTime < this.timeStarted) {
+      return 0;
+    }
+    if (fromTime < this.timeStarted) {
+      fromTime = this.timeStarted;
+    }
+    if (toTime > this.timeEnded) {
+      toTime = this.timeEnded;
+    }
+    int milliseconds = toTime - fromTime;
+    for (int i = 0; i < this.resumes.length; ++i) {
+      Pause pause = this.pauses[i];
+      Resume resume = this.resumes[i];
+      int timePaused = pause.timeAdded;
+      int timeResumed = resume.timeAdded;
+      if (timePaused > toTime) {
+        continue;
+      }
+      if (timeResumed < fromTime) {
+        continue;
+      }
+      if (timePaused < fromTime) {
+        timePaused = fromTime;
+      }
+      if (timeResumed > toTime) {
+        timeResumed = toTime;
+      }
+      milliseconds -= timeResumed - timePaused;
+    }
+    if (this.pauses.length > this.resumes.length) {
+      int timePaused = this.pauses[this.pauses.length - 1].timeAdded;
+      if (timePaused < toTime) {
+        if (timePaused < fromTime) {
+          timePaused = fromTime;
+        }
+        milliseconds -= toTime - timePaused;
+      }
+    }
+    return milliseconds;
+  }
+
+  Duration durationPlayed({int fromTime=-1, int toTime=-1}) {
+    return Duration(milliseconds: this.msPlayed(fromTime: fromTime, toTime: toTime));
+  }
+}
+
+class Pause {
+  int timeAdded;
+  Pause(this.timeAdded);
+
+  static Pause fromMap(Map<String, dynamic> map) {
+    return Pause(map['time_added']);
+  }
+
+  Map<String, dynamic> toMap(String playId) {
+    return {
+      'time_added': this.timeAdded,
+      'play_id': playId
+    };
+  }
+}
+
+class Resume {
+  int timeAdded;
+  Resume(this.timeAdded);
+
+  static Resume fromMap(Map<String, dynamic> map) {
+    return Resume(map['time_added']);
+  }
+
+  Map<String, dynamic> toMap(String playId) {
+    return {
+      'time_added': this.timeAdded,
+      'play_id': playId,
+    };
   }
 }
 
 class User {
   String username;
-  int msListened;
-  User(this.username, this.msListened);
-  static User fromJson(Map<String, dynamic> jsonMap) {
-    return User(jsonMap['username'], jsonMap['listened_ms']);
+  Duration playDuration;
+  Map<Track, Duration> topTracks;
+  User(this.username, this.playDuration, this.topTracks);
+  static User fromMap(Map<String, dynamic> map) {
+    Map<Track, Duration> topTracks = {};
+    for (Map<String, dynamic> trackMap in map['top_tracks']) {
+      Track track = Track.fromMap(trackMap);
+      topTracks[track] = Duration(milliseconds: trackMap['listened_ms']);
+    }
+    return User(map['username'], Duration(milliseconds: map['listened_ms']), topTracks);
   }
 }
 
@@ -104,24 +281,14 @@ class DbProvider {
         await db.execute('''
         CREATE TABLE albums (
           id TEXT PRIMARY KEY,
-          album_name TEXT NOT NULL,
-          album_type TEXT NOT NULL,
-          release_date TEXT NOT NULL,
-          release_date_precision TEXT NOT NULL,
-          listened_ms INT NOT NULL
+          album_name TEXT NOT NULL
         )
         ''');
 
         await db.execute('''
         CREATE TABLE tracks (
           track_name TEXT NOT NULL,
-          duration_ms INT NOT NULL,
-          popularity INT NOT NULL,
-          preview_url TEXT,
-          track_number INT NOT NULL,
-          explicit BOOL NOT NULL,
           album_id TEXT NOT NULL,
-          listened_ms INT NOT NULL,
           FOREIGN KEY (album_id) REFERENCES albums (id)
         )
         ''');
@@ -129,14 +296,12 @@ class DbProvider {
         await db.execute('''
         CREATE table artists (
           id TEXT PRIMARY KEY,
-          artist_name TEXT NOT NULL,
-          listened_ms INT NOT NULL
+          artist_name TEXT NOT NULL
         )
         ''');
 
         await db.execute('''
         CREATE TABLE album_artists (
-          id TEXT PRIMARY KEY,
           artist_id TEXT NOT NULL,
           album_id TEXT NOT NULL,
           FOREIGN KEY (artist_id) REFERENCES artists (id),
@@ -146,7 +311,6 @@ class DbProvider {
 
         await db.execute('''
         CREATE TABLE track_artists (
-          id TEXT PRIMARY KEY,
           artist_id TEXT NOT NULL,
           track_id TEXT NOT NULL,
           FOREIGN KEY (artist_id) REFERENCES artists (id),
@@ -164,22 +328,64 @@ class DbProvider {
           FOREIGN KEY (track_id) REFERENCES tracks (id)
         )
         ''');
+
+        await db.execute('''
+        CREATE TABLE pauses (
+          id TEXT PRIMARY KEY,
+          time_added INT NOT NULL,
+          play_id TEXT NOT NULL,
+          FOREIGN KEY (play_id) REFERENCES plays (id)
+        )
+        ''');
+
+        await db.execute('''
+        CREATE TABLE resumes (
+          id TEXT PRIMARY KEY,
+          time_added INT NOT NULL,
+          play_id TEXT NOT NULL,
+          FOREIGN KEY (play_id) REFERENCES plays (id)
+        )
+        ''');
       },
     );
   }
 
-  Future<void> addTrack(Track track) {
-    //this.db.insert(table, values)
-  }
-
-  Future<void> addPlay(Play play) {
-    this.addTrack(play.track);
-  }
-
-  Future<void> addPlays(List<Play> plays) {
-    for (Play play in plays) {
-      this.addPlay(play);
+  Future<void> addData(APIData data) async {
+    var batch = db.batch();
+    for (Play play in data.plays.values) {
+      batch.insert('plays', play.toMap());
+      for (Pause pause in play.pauses) {
+        batch.insert('pauses', pause.toMap(play.id));
+      }
+      for (Resume resume in play.resumes) {
+        batch.insert('resumes', resume.toMap(play.id));
+      }
     }
+    for (Album album in data.albums.values) {
+      batch.insert('albums', album.toMap());
+      for (Artist artist in album.artists) {
+        batch.insert('album_artists', {
+          'album_id': album.id,
+          'artist_id': artist.id,
+        });
+      }
+    }
+    for (Track track in data.tracks.values) {
+      batch.insert('tracks', track.toMap());
+      for (Artist artist in track.artists) {
+        batch.insert('track_artists', {
+          'track_id': track.id,
+          'artist_id': artist.id,
+        });
+      }
+    }
+    for (Artist artist in data.artists.values) {
+      batch.insert('artists', artist.toMap());
+    }
+    await batch.commit();
+  }
+
+  Future<APIData> getData() {
   }
 }
 
@@ -219,9 +425,21 @@ class APIClient {
     List<Play> plays = [];
     List<dynamic> playsJson = json.decode(r.body);
     for (dynamic playJson in playsJson) {
-      plays.add(Play.fromJson(playJson));
+      plays.add(Play.fromMap(playJson));
     }
-    this.dbProvider.addPlays(plays);
+    return plays;
+  }
+
+  Future<List<Play>> fetchTrackHistory(Track track, int hrsLimit) async {
+    http.Response r = await http.get(BACKEND + '/api/track_history?hrs_limit=' + hrsLimit.toString() + "&track_id=" + track.id,
+      headers: {
+      'Authorization': 'Bearer ${this.accessToken}'
+    });
+    List<Play> plays = [];
+    List<dynamic> playsJson = json.decode(r.body);
+    for (dynamic playJson in playsJson) {
+      plays.add(Play.fromMap(playJson));
+    }
     return plays;
   }
 
@@ -239,23 +457,25 @@ class APIClient {
     for (int i = 0; i < hrs.length; ++i) {
       for (dynamic trackJson in tracksJson[hrs[i].toString()]) {
         if (tracks.containsKey(hrs[i])) {
-          tracks[hrs[i]].add(Track.fromJson(trackJson));
+          tracks[hrs[i]].add(Track.fromMap(trackJson));
         } else {
-          tracks[hrs[i]] = [Track.fromJson(trackJson)];
+          tracks[hrs[i]] = [Track.fromMap(trackJson)];
         }
       }
     }
     return tracks;
   }
 
-  Future<List<User>> fetchTopUsers(int hrsLimit) async {
-    http.Response r = await http.get(BACKEND + '/api/top_users?hrs_limit=' + hrsLimit.toString(), headers: {
-      'Authorization': 'Bearer ${this.accessToken}'
-    });
+  Future<List<User>> fetchTopUsers(int fromTime, int toTime) async {
+    http.Response r = await http.get(BACKEND + '/api/top_users?from_time=' + fromTime.toString() + '&to_time=' + toTime.toString(),
+      headers: {
+        'Authorization': 'Bearer ${this.accessToken}'
+      }
+    );
     List<User> users = [];
     List<dynamic> usersJson = json.decode(r.body);
     for (dynamic userJson in usersJson) {
-      users.add(User.fromJson(userJson));
+      users.add(User.fromMap(userJson));
     }
     return users;
   }
@@ -275,7 +495,6 @@ class APIClient {
       'username': username,
       'password': password
     });
-    print(r.body);
     if (r.statusCode != 200)
       return false;
     Map<String, dynamic> rJson = json.decode(r.body);
@@ -304,5 +523,166 @@ class APIClient {
     // if (r.statusCode != 202)
     //   return false;
     // Map<String, dynamic> rJson = json.decode(r.body)[''];
+  }
+
+  Future<APIData> fetchThisMonthData() async {
+    final now = DateTime.now();
+    int beginningOfMonth = new DateTime(now.year, now.month).millisecondsSinceEpoch;
+    return this.fetchData(beginningOfMonth, now.millisecondsSinceEpoch);
+  }
+
+  Future<APIData> fetchData(int fromTime, int toTime) async {
+    http.Response r = await http.get(BACKEND + '/api/data?from_time=' + fromTime.toString() + "&to_time=" + toTime.toString(),
+      headers: {
+        'Authorization': 'Bearer ${this.accessToken}'
+      }
+    );
+
+    Map<String, Play> plays = {};
+    Map<String, Artist> artists = {};
+    Map<String, Track> tracks = {};
+    Map<String, Album> albums = {};
+
+    List<dynamic> playsJson = json.decode(r.body);
+    for (dynamic playJson in playsJson) {
+      Play play = Play.fromMap(playJson);
+      plays[play.id] = play;
+      albums[play.track.album.id] = play.track.album;
+      if (!tracks.containsKey(play.track.id)) {
+        tracks[play.track.id] = play.track;
+      }
+      tracks[play.track.id].plays.add(play);
+      for (Artist artist in play.track.artists) {
+        artists[artist.id] = artist;
+      }
+      for (Artist artist in play.track.album.artists) {
+        artists[artist.id] = artist;
+      }
+    }
+    APIData data = APIData(artists, albums, tracks, plays);
+    int lastMidnight = DateTimeHelper.lastMidnight().millisecondsSinceEpoch;
+    //await this.dbProvider.addData(data);
+    return data;
+  }
+}
+
+class APIData {
+  Map<String, Artist> artists;
+  Map<String, Album> albums;
+  Map<String, Track> tracks;
+  Map<String, Play> plays;
+
+  APIData(this.artists, this.albums, this.tracks, this.plays);
+
+  Map<Track, Duration> topTracksToday({int limit=-1}) {
+    int lastMidnight = DateTimeHelper.lastMidnight().millisecondsSinceEpoch;
+    return this.topTracks(lastMidnight, DateTime.now().millisecondsSinceEpoch, limit: limit);
+  }
+
+  Map<Track, Duration> topTracksThisMonth({int limit=-1}) {
+    int beginningOfMonth = DateTimeHelper.beginningOfMonth().millisecondsSinceEpoch;
+    return this.topTracks(beginningOfMonth, DateTime.now().millisecondsSinceEpoch, limit: limit);
+  }
+
+  Map<Track, Duration> topTracksThisWeek({int limit=-1}) {
+    int beginningOfWeek = DateTimeHelper.beginningOfWeek().millisecondsSinceEpoch;
+    return this.topTracks(beginningOfWeek, DateTime.now().millisecondsSinceEpoch, limit: limit);
+  }
+
+  Map<Track, Duration> topTracks(int fromTime, int toTime, {int limit=-1}) {
+    if (limit == -1) limit = this.tracks.keys.length;
+    Map<Track, int> tracksMsPlayed = {};
+    for (Track track in this.tracks.values) {
+      for (Play play in track.plays) {
+        int msPlayed = play.msPlayed(fromTime: fromTime, toTime: toTime);
+        if (msPlayed > 0) {
+          if (tracksMsPlayed.containsKey(track)) {
+            tracksMsPlayed[track] += play.msPlayed(fromTime: fromTime, toTime: toTime);
+          } else {
+            tracksMsPlayed[track] = play.msPlayed(fromTime: fromTime, toTime: toTime);
+          }
+        }
+      }
+    }
+    List<Track> topTracks = [];
+    for (Track track in this.tracks.values) {
+      if (tracksMsPlayed.containsKey(track)) {
+        int msPlayed = tracksMsPlayed[track];
+        for (int i = 0; i < limit; ++i) {
+          if (i < topTracks.length) {
+            Track otherTrack = topTracks[i];
+            if (msPlayed > tracksMsPlayed[otherTrack]) {
+              topTracks.insert(i, track);
+              if (topTracks.length > limit) {
+                topTracks.removeAt(limit);
+              }
+              break;
+            }
+          } else {
+            topTracks.add(track);
+            break;
+          }
+        }
+      }
+    }
+    Map<Track, Duration> topTracksDurationMap = {};
+    for (Track track in topTracks) {
+      topTracksDurationMap[track] = Duration(milliseconds: tracksMsPlayed[track]);
+    }
+    if (topTracks.length == 0)
+      return null;
+    return topTracksDurationMap;
+  }
+
+  /* TODO: implement a better algorithm */
+  List<Track> getRandomTracks(int count) {
+    List<Track> randomTracks = [];
+    List<Track> allTracks = [];
+    Random rng = Random();
+    for (Track track in this.tracks.values) {
+      allTracks.add(track);
+    }
+    if (allTracks.length < count) {
+      return null;
+    }
+    for (int i = 0; i < count; ++i) {
+      int idx = rng.nextInt(allTracks.length);
+      randomTracks.add(allTracks[idx]);
+      allTracks.removeAt(idx);
+    }
+    return randomTracks;
+  }
+
+  List<Play> sortedPlays() {
+    List<Play> sortedPlays = [];
+    for (Play play in this.plays.values) {
+      bool inserted = false;
+      for (int i = 0; i < sortedPlays.length; ++i) {
+        if (sortedPlays[i].timeStarted < play.timeStarted) {
+          sortedPlays.insert(i, play);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) {
+        sortedPlays.add(play);
+      }
+    }
+    return sortedPlays;
+  }
+}
+
+class DateTimeHelper {
+  static DateTime lastMidnight() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+  static DateTime beginningOfMonth() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month);
+  }
+  static DateTime beginningOfWeek() {
+    final now = DateTime.now();
+    return now.subtract(new Duration(days: now.weekday));
   }
 }

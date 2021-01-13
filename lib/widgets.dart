@@ -12,58 +12,96 @@ var horizontalExampleWidget = HorizontalMusicEntryWidget(
   null
 );
 
-var verticalExampleWidget = VerticalMusicEntryWidget(
-  'https://i.scdn.co/image/ab67616d00004851572f05af2c4a51eaf9117d76',
-  'track title',
-  'artist name',
-  '3 hrs, 18 mins, 50 secs'
-);
+class MainContainerWidget extends StatelessWidget {
+  Widget child;
+  Widget bottomNavigationBar;
+
+  MainContainerWidget({this.child, this.bottomNavigationBar});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: SafeArea(
+        child: Scaffold(
+          backgroundColor: mainBlack,
+          body: this.child,
+          bottomNavigationBar: this.bottomNavigationBar != null ? this.bottomNavigationBar : null,
+        ),
+      ),
+    );
+  }
+}
 
 class VerticalMusicEntryWidget extends StatelessWidget {
   String imageUrl;
   String title;
   String subTitle;
   String info;
+  bool showText = true;
 
-  VerticalMusicEntryWidget(this.imageUrl, this.title, this.subTitle, this.info);
+  VerticalMusicEntryWidget(this.imageUrl, this.title, this.subTitle, this.info, {this.showText});
 
-  static VerticalMusicEntryWidget fromTrack(Track track) {
-    return VerticalMusicEntryWidget(track.album.imageUrl, track.name, track.artist.name,
-        (track.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs ' +
-        ((track.msListened / 1000 / 60) % 60).toInt().toString() + ' mins ' +
-        ((track.msListened / 1000) % 60).toInt().toString() + ' secs'
+  static VerticalMusicEntryWidget fromTrack(Track track, {Duration playDuration: null, bool showText=true}) {
+    int hrs, mins, secs;
+    if (playDuration == null) {
+      hrs = (track.msPlayed() / 1000 / 60 / 60).toInt();
+      mins = ((track.msPlayed() / 1000 / 60) % 60).toInt();
+      secs = ((track.msPlayed() / 1000) % 60).toInt();
+    } else {
+      hrs = playDuration.inHours;
+      mins = playDuration.inMinutes % 60;
+      secs = playDuration.inSeconds % 60;
+    }
+    return VerticalMusicEntryWidget(track.album.covers[1].url, track.name, track.artists[0].name,
+      (hrs > 0 ? hrs.toString() + ' hrs ' : '') +
+      (mins > 0 ? mins.toString() + ' mins ' : '') +
+      (secs > 0 ? secs.toString() + ' secs ' : ''),
+      showText: showText
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(child: Container(
-      margin: const EdgeInsets.all(4),
-      child: Column(children: <Widget>[
-        Container(
-          child: Image.network(
-            this.imageUrl,
+      margin: EdgeInsets.all(4),
+      child: Column(
+        children: <Widget>[
+          Container(
             width: 130,
-            height: 130,
-            fit: BoxFit.contain,
-          )
-        ),
-        SizedBox(height: 5),
-        Expanded(
-          child: Column(
+            child: Image.network(
+              this.imageUrl,
+              frameBuilder: (BuildContext context, Widget child, int frame, bool wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded) {
+                  return child;
+                }
+                return AnimatedOpacity(
+                  child: child,
+                  opacity: frame == null ? 0 : 1,
+                  duration: const Duration(seconds: 1),
+                  curve: Curves.easeOut,
+                );
+              },
+              fit: BoxFit.contain,
+            )
+          ),
+          if (this.showText) Column(
             children: [
-              this.subTitle != null
-                ? Flexible(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: <Widget>[
-                      Text(this.title, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainRed)),
-                      Text(this.subTitle, overflow: TextOverflow.ellipsis, style: TextStyle(color: secondaryBlack)),
-                      if (this.info != null) Text(this.info, style: TextStyle(color: secondaryBlack, fontSize: 12)),
-                  ])) : Text(this.title),
+              SizedBox(height: 5),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: <Widget>[
+                  Text(this.title.replaceAll(' ', '\u00A0'), overflow: TextOverflow.ellipsis, maxLines: 1, style: TextStyle(color: mainRed)),
+                  if (this.subTitle != null) Text(this.subTitle, overflow: TextOverflow.ellipsis, style: TextStyle(color: secondaryBlack)),
+                  if (this.info != null) Text(
+                    this.info,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: secondaryBlack, fontSize: 12)
+                  ),
+                ],
+              ),
             ]
           )
-        )
       ], crossAxisAlignment: CrossAxisAlignment.start,),
       width: 140,
     ), borderRadius: BorderRadius.circular(7),);
@@ -78,12 +116,21 @@ class HorizontalMusicEntryWidget extends StatelessWidget {
 
   HorizontalMusicEntryWidget(this.imageUrl, this.title, this.subTitle, this.info);
 
-  static HorizontalMusicEntryWidget fromTrack(Track track) {
-    return HorizontalMusicEntryWidget(track.album.imageUrl, track.name, track.artist.name, Column(
+  static HorizontalMusicEntryWidget fromTrack(Track track, {Duration playDuration=null}) {
+    if (playDuration == null)
+        return HorizontalMusicEntryWidget(track.album.covers[0].url, track.name, track.artists[0].name, null);
+    int hrs, mins, secs;
+    print(playDuration);
+    if (playDuration != null) {
+      hrs = playDuration.inHours;
+      mins = playDuration.inMinutes % 60;
+      secs = playDuration.inSeconds % 60;
+    }
+    return HorizontalMusicEntryWidget(track.album.covers[0].url, track.name, track.artists[0].name, Column(
       children: [
-        Text((track.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs'),
-        Text(((track.msListened / 1000 / 60) % 60).toInt().toString() + ' mins'),
-        Text(((track.msListened / 1000) % 60).toInt().toString() + ' secs'),
+        Text(hrs.toString() + ' hrs', style: TextStyle(color: secondaryBlack)),
+        Text(mins.toString() + ' mins', style: TextStyle(color: secondaryBlack)),
+        Text(secs.toString() + ' secs', style: TextStyle(color: secondaryBlack)),
       ],
     ));
   }
@@ -91,7 +138,7 @@ class HorizontalMusicEntryWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(child: Container(
-      color: Color.fromRGBO(17, 17, 17, 0.65),
+      color: tertiaryBlack,
       child: Row(children: <Widget>[
         Container(
           margin: const EdgeInsets.all(4),
@@ -109,13 +156,16 @@ class HorizontalMusicEntryWidget extends StatelessWidget {
               this.subTitle != null
                 ? Flexible(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
                       Text(this.title, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainRed)),
                       SizedBox(height: 5,),
                       Text(this.subTitle, overflow: TextOverflow.ellipsis, style: TextStyle(color: secondaryBlack)),
                   ])) : Text(this.title),
-              if (this.info != null) this.info,
+              if (this.info != null) Container(
+                child: this.info,
+                padding: EdgeInsets.fromLTRB(0, 0, 5, 0),
+              ),
             ]
           )
         )
@@ -130,43 +180,39 @@ class RootWidget extends StatefulWidget {
   RootWidget(this.apiClient);
 
   @override
-  State<StatefulWidget> createState() => RootWidgetState();
+  State<StatefulWidget> createState() => RootWidgetState(this.apiClient);
 }
 
 class RootWidgetState extends State<RootWidget> {
-  Future<bool> future;
+  Future<bool> _future;
+  APIClient apiClient;
 
-  Future<bool> init() async {
-    await widget.apiClient.init();
-    return true;
+  RootWidgetState(this.apiClient) {
+    this._future = () async {
+      await this.apiClient.init();
+      return true;
+    }();
   }
 
   @override
   void initState() { 
     super.initState();
-    this.future = this.init();
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: new ThemeData(
-        primaryColor: mainBlack,
-        primaryTextTheme: TextTheme(
-          title: TextStyle(
-            color: textColor,
-          ),
-        ),
-      ),
       home: FutureBuilder<bool>(
-        future: this.future,
+        future: this._future,
         builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
-          if (snapshot.hasData) {
-            if (widget.apiClient.isAuthDone()) {
-              return HomeWidget(widget.apiClient, this);
-            } else {
-              return AuthWidget(widget.apiClient, this);
-            }
+          if (snapshot.hasData && snapshot.data) {
+            return AnimatedCrossFade(
+              crossFadeState: widget.apiClient.isAuthDone()
+                ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+              duration: Duration(milliseconds: 200),
+              firstChild: widget.apiClient.isAuthDone() ? AfterAuthWidget(widget.apiClient) : Container(),
+              secondChild: widget.apiClient.isAuthDone() ? Container() : AuthWidget(widget.apiClient, this),
+            );
           } else {
             return Scaffold(
               backgroundColor: mainBlack,
@@ -179,27 +225,25 @@ class RootWidgetState extends State<RootWidget> {
   }
 }
 
-class HomeWidget extends StatefulWidget {
+class AfterAuthWidget extends StatefulWidget {
   final APIClient apiClient;
-  final RootWidgetState rootWidgetState;
 
-  HomeWidget(this.apiClient, this.rootWidgetState);
+  AfterAuthWidget(this.apiClient);
   
   @override
-  State<StatefulWidget> createState() => HomeWidgetState(this.apiClient);
+  State<StatefulWidget> createState() => AfterAuthWidgetState(this.apiClient);
 }
 
-class HomeWidgetState extends State<HomeWidget> {
+class AfterAuthWidgetState extends State<AfterAuthWidget> {
   int _bottomNavigationBarIndex = 0;
   PageController _pageController;
-  Widget _generalWidget;
-  Widget _historyWidget;
-  Widget _leaderboardWidget;
+  Future<APIData> _future;
+  APIClient apiClient;
 
-  HomeWidgetState(APIClient apiClient) {
-    _generalWidget = GeneralWidget(apiClient);
-    _historyWidget = HistoryWidget(apiClient);
-    _leaderboardWidget = LeaderboardWidget(apiClient);
+  AfterAuthWidgetState(this.apiClient) {
+    _future = () async {
+      return await this.apiClient.fetchThisMonthData();
+    }();
   }
 
   @override
@@ -214,253 +258,611 @@ class HomeWidgetState extends State<HomeWidget> {
     super.dispose();
   }
 
-  void bottomNavigationBarOnTap(int index) {
+  void _bottomNavigationBarOnTap(int index) {
     setState(() {
       _pageController.animateToPage(index,
-        duration: Duration(milliseconds: 500), curve: Curves.easeOut);
+        duration: Duration(milliseconds: 250), curve: Curves.easeOut);
       _bottomNavigationBarIndex = index;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: mainBlack,
-        bottomNavigationBar: BottomNavigationBar(
-          selectedItemColor: mainRed,
-          unselectedItemColor: secondaryBlack,
-          backgroundColor: mainBlack, items: [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'General'),
-            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-            BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
-          ],
-          onTap: this.bottomNavigationBarOnTap,
-          currentIndex: this._bottomNavigationBarIndex,
-        ),
-        body: SizedBox.expand(
-          child: PageView(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() => _bottomNavigationBarIndex = index);
-            },
-            children: <Widget>[
-              _generalWidget,
-              _historyWidget,
-              _leaderboardWidget,
-            ],
-          ),
-        ),
-      )
+    return FutureBuilder<APIData>(
+      future: this._future,
+      builder: (BuildContext context, AsyncSnapshot<APIData> snapshot) {
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator());
+        } else {
+          return SafeArea(
+            child: Scaffold(
+              //backgroundColor: mainBlack,
+              bottomNavigationBar: Container(
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: mainRed, width: 2)),
+                ),
+                child: BottomNavigationBar(
+                  selectedItemColor: mainRed,
+                  backgroundColor: mainBlack,
+                  unselectedItemColor: secondaryBlack,
+                  items: [
+                    BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+                    BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
+                    BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
+                  ],
+                  onTap: this._bottomNavigationBarOnTap,
+                  currentIndex: this._bottomNavigationBarIndex,
+                )
+              ),
+              body: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: FractionalOffset.topRight,
+                    end: FractionalOffset.bottomLeft,
+                    colors: [
+                      Color.fromRGBO(150, 93, 93, 1),
+                      mainBlack,
+                      mainBlack,
+                    ],
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: mainRed,
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: const Radius.circular(30.0),
+                          bottomRight: const Radius.circular(30.0),
+                        )
+                      ),
+                      height: 50,
+                      child: Stack(
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              padding: EdgeInsets.fromLTRB(10, 0, 0, 0),
+                              child: Text("Trackify", style: TextStyle(color: mainBlack, fontSize: 21)),
+                            )
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Material( // to make iconbutton splash appear above parent
+                              type: MaterialType.transparency, // ^
+                              child: IconButton(
+                                icon: Icon(Icons.settings),
+                                tooltip: "settings",
+                                onPressed: () {
+                                  print('settings button pressed');
+                                },
+                              ),
+                            )
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(child: PageView(
+                        controller: _pageController,
+                        onPageChanged: (index) {
+                          setState(() => _bottomNavigationBarIndex = index);
+                        },
+                        children: <Widget>[
+                          HomeWidget(snapshot.data),
+                          HistoryWidget(snapshot.data),
+                          LeaderboardWidget(this.apiClient),
+                        ],
+                    ))
+                  ]
+                ),
+              ),
+            )
+          );
+        }
+      }
     );
   }
 }
 
-class GeneralWidget extends StatelessWidget {
-  final APIClient apiClient;
+class HomeWidget extends StatelessWidget {
+  final APIData apiData;
+  Map<Track, Duration> topTracksToday;
+  Map<Track, Duration> topTracksThisWeek;
+  Map<Track, Duration> topTracksThisMonth;
+  List<Track> randomTracks;
 
-  List<Track> topTracksToday;
-  List<Track> topTracksThisWeek;
-  List<Track> topTracksThisMonth;
-
-  Future<bool> future;
-
-  GeneralWidget(this.apiClient) {
-    this.future = fetchData();
-  }
-
-  Future<bool> fetchData() async {
-    Map<int, List<Track>> topTracks = await this.apiClient.fetchTopTracks([24, 24 * 7, 24 * 30]);;
-    this.topTracksThisMonth = topTracks[24 * 30];
-    this.topTracksThisWeek = topTracks[24 * 7];
-    this.topTracksToday = topTracks[24];
-    return true;
+  HomeWidget(this.apiData) {
+    topTracksToday = apiData.topTracksToday();
+    topTracksThisWeek = apiData.topTracksThisWeek();
+    topTracksThisMonth = apiData.topTracksThisMonth();
+    randomTracks = apiData.getRandomTracks(4);
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: this.future,
-      builder: (BuildContext context, AsyncSnapshot snapshot) {
-        if (snapshot.hasData) {
-          return SingleChildScrollView(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              //Column(children: <Widget>[
-              //  Container(child: Center(child: Text('your top song today', style: highlightedTextStyle)), height: 40,),
-              //  if (this.topTracksToday != null) MusicEntryWidget.fromTrack(this.topTracksToday[0]),
-              //]),
-              //SizedBox(height: 30),
-              //Column(children: <Widget>[
-              //  Container(child: Center(child: Text('your top song this week', style: highlightedTextStyle))),
-              //  SizedBox(height: 20,),
-              //  if (this.topTracksThisWeek != null) MusicEntryWidget.fromTrack(this.topTracksThisWeek[0]),
-              //]),
-              //SizedBox(height: 30),
-              //Column(children: <Widget>[
-              //  Container(child: Center(child: Text('your top song this month', style: highlightedTextStyle))),
-              //  SizedBox(height: 20,),
-              //  if (this.topTracksThisMonth != null) MusicEntryWidget.fromTrack(this.topTracksThisMonth[0]),
-              //]),
-              Container(
-                child: Text('Good day', style: TextStyle(color: mainRed, fontSize: 25)),
-                padding: EdgeInsets.all(15),
-              ),
-              Container(child: Row(
-                children: [
-                  Expanded(child: horizontalExampleWidget),
-                  SizedBox(width: 5),
-                  Expanded(child: horizontalExampleWidget),
-                ],
-              ), padding: EdgeInsets.fromLTRB(10, 0, 10, 5)),
-              Container(child: Row(
-                children: [
-                  Expanded(child: horizontalExampleWidget),
-                  SizedBox(width: 5),
-                  Expanded(child: horizontalExampleWidget),
-                ],
-              ), padding: EdgeInsets.fromLTRB(10, 0, 10, 5)),
-              if (this.topTracksToday != null) Container(
-                child: Text('Top tracks today', style: TextStyle(color: mainRed, fontSize: 25)),
-                padding: EdgeInsets.all(15),
-              ),
-              if (this.topTracksToday != null) Container(child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (Track track in this.topTracksToday) Container(
-                    child: VerticalMusicEntryWidget.fromTrack(track),
+    return SingleChildScrollView(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            child: Text('Good day', style: TextStyle(color: mainRed, fontSize: 21)),
+            padding: EdgeInsets.fromLTRB(15, 15, 0, 5),
+          ),
+          Container(child: Row(
+              children: [
+                Expanded(child: HorizontalMusicEntryWidget.fromTrack(randomTracks[0])),
+                SizedBox(width: 5),
+                Expanded(child: HorizontalMusicEntryWidget.fromTrack(randomTracks[1])),
+              ],
+            ), padding: EdgeInsets.fromLTRB(10, 0, 10, 5)),
+          Container(child: Row(
+              children: [
+                Expanded(child: HorizontalMusicEntryWidget.fromTrack(randomTracks[2])),
+                SizedBox(width: 5),
+                Expanded(child: HorizontalMusicEntryWidget.fromTrack(randomTracks[3])),
+              ],
+            ), padding: EdgeInsets.fromLTRB(10, 0, 10, 5)),
+          if (this.topTracksToday != null) HorizontalTrackListWidget(
+            title: 'Top tracks today',
+            tracks: this.topTracksToday,
+          ),
+          if (this.topTracksThisWeek != null) HorizontalTrackListWidget(
+            title: 'Top tracks this week',
+            tracks: this.topTracksThisWeek,
+          ),
+          if (this.topTracksThisMonth != null) HorizontalTrackListWidget(
+            title: 'Top tracks this month',
+            tracks: this.topTracksThisMonth,
+          ),
+        ],
+    ));
+  }
+}
+
+class HorizontalTrackListWidget extends StatelessWidget {
+  String title;
+  Map<Track, Duration> tracks;
+
+  HorizontalTrackListWidget({this.title, this.tracks});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      child: Column(
+        children: [
+          Container(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(title, style: TextStyle(color: mainRed, fontSize: 21)),
+                Row(
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TrackListWidget(
+                              title: this.title,
+                              tracks: this.tracks,
+                            )
+                          ),
+                        );
+                      },
+                      child: Container(
+                        child: Row(
+                          children: [
+                            Text('View more ', style: TextStyle(color: Colors.black, fontSize: 15)),
+                            Icon(Icons.arrow_forward_ios, size: 17),
+                          ]
+                        ),
+                        padding: EdgeInsets.all(7)
+                      ),
+                    ),
+                  ]
+                )
+              ],
+            ),
+            padding: EdgeInsets.fromLTRB(15, 30, 0, 5),
+          ),
+          Container(child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (int i = 0; i < this.tracks.keys.length && i < 10; ++i) InkWell(child: Container(
+                    child: VerticalMusicEntryWidget.fromTrack(this.tracks.keys.elementAt(i), playDuration: this.tracks.values.elementAt(i)),
                     padding: EdgeInsets.fromLTRB(10, 0, 10, 5),
-                  ),
-                ],
-              ), height: 200),
-              if (this.topTracksThisWeek != null) Container(
-                child: Text('Top tracks this week', style: TextStyle(color: mainRed, fontSize: 25)),
-                padding: EdgeInsets.all(15),
-              ),
-              if (this.topTracksThisWeek != null) Container(child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (Track track in this.topTracksThisWeek) Container(
-                    child: VerticalMusicEntryWidget.fromTrack(track),
-                    padding: EdgeInsets.fromLTRB(10, 0, 10, 5),
-                  ),
-                ],
-              ), height: 200),
-              if (this.topTracksThisMonth != null) Container(
-                child: Text('Top tracks this month', style: TextStyle(color: mainRed, fontSize: 25)),
-                padding: EdgeInsets.all(15),
-              ),
-              if (this.topTracksThisMonth != null) Container(child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (Track track in this.topTracksThisMonth) Container(
-                    child: VerticalMusicEntryWidget.fromTrack(track),
-                    padding: EdgeInsets.fromLTRB(10, 0, 10, 5),
-                  ),
-                ],
-              ), height: 200),
-            ],
-          ));
-        } else {
-          return Center(child: CircularProgressIndicator());
-        }
-      },
+                  ), onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => TrackHistoryWidget(this.tracks.keys.elementAt(i))),
+                    );
+                }),
+              ],
+          ), height: 200)
+        ],
+      ),
+      color: Colors.transparent);
+  }
+}
+
+class CounterWidget extends StatefulWidget {
+  int count;
+  Function onChange;
+
+  CounterWidget({this.count=0, this.onChange});
+  
+  @override
+  State<CounterWidget> createState() => CounterWidgetState();
+}
+
+class CounterWidgetState extends State<CounterWidget> {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(Icons.remove, size: 21, color: mainRed),
+          tooltip: "decrement",
+          onPressed: () {
+            if (widget.count > 1) {
+              setState(() {
+                  widget.count -= 1;
+                  widget.onChange(widget.count);
+              });
+            }
+          },
+        ),
+        Text(widget.count.toString(), style: TextStyle(color: secondaryBlack, fontSize: 20)),
+        IconButton(
+          icon: Icon(Icons.add, size: 21, color: mainRed),
+          tooltip: "increment",
+          onPressed: () {
+            setState(() {
+                widget.count += 1;
+                widget.onChange(widget.count);
+            });
+          },
+        ),
+      ]
     );
   }
+}
+
+class TrackListWidget extends StatefulWidget {
+  Map<Track, Duration> tracks;
+  String title;
+
+  TrackListWidget({this.title, this.tracks});
+
+  @override
+  State<TrackListWidget> createState() => TrackListWidgetState();
+}
+
+class TrackListWidgetState extends State<TrackListWidget> {
+  int _tracksPerRow = 3;
+  bool _showInfo = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return GeneralPage(
+      title: Text(widget.title, style: TextStyle(color: mainRed, fontSize: 21)),
+      content: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  SizedBox(width: 10),
+                  Text('columns', style: TextStyle(color: secondaryBlack, fontSize: 18)),
+                  CounterWidget(count: _tracksPerRow, onChange: (int count) {
+                      setState(() {
+                          _tracksPerRow = count;
+                      });
+                  }),
+                ]
+              ),
+              Row(
+                children: [
+                  Text('info', style: TextStyle(color: secondaryBlack, fontSize: 18)),
+                  Switch(
+                    activeColor: mainRed,
+                    value: _showInfo,
+                    onChanged: (value) {
+                      setState(() {
+                          _showInfo = value;
+                      });
+                    },
+                  ),
+                  SizedBox(width: 10),
+                ]
+              ),
+            ],
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: widget.tracks.keys.length % _tracksPerRow == 1 ? widget.tracks.keys.length ~/ _tracksPerRow + 1 : widget.tracks.keys.length ~/ _tracksPerRow,
+              itemBuilder: (BuildContext context, int index) {
+                return IntrinsicHeight(
+                  child: Row(
+                    mainAxisAlignment: index * _tracksPerRow + _tracksPerRow < widget.tracks.keys.length ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.start,
+                    children: [
+                      for (int i = index * _tracksPerRow; i < index * _tracksPerRow + _tracksPerRow && i < widget.tracks.keys.length; ++i) Flexible(
+                        child: InkWell(
+                          child: VerticalMusicEntryWidget.fromTrack(widget.tracks.keys.elementAt(i),
+                            playDuration: widget.tracks.values.elementAt(i),
+                            showText: _showInfo,
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => TrackHistoryWidget(widget.tracks.keys.elementAt(i))),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            )
+          ),
+        ]
+      ),
+    );
+  }
+}
+
+enum HistoryEntryType {
+  TITLE, PLAY
 }
 
 class HistoryWidget extends StatelessWidget {
-  final APIClient apiClient;
+  APIData apiData;
+  Future<List<MapEntry<dynamic, HistoryEntryType>>> _future;
 
-  HistoryWidget(this.apiClient);
+  HistoryWidget(this.apiData) {
+    this._future = () async {
+      var history = this.apiData.sortedPlays();
+      List<MapEntry<dynamic, HistoryEntryType>> entries = [];
+      for (Play play in history) {
+        String title;
+        DateTime now = DateTime.now();
+        DateTime startTime = play.startDateTime();
+        if (DateTime(startTime.year, startTime.month, startTime.day) == DateTime(now.year, now.month, now.day)) {
+          title = "Today";
+        } else if (DateTime(startTime.year, startTime.month, startTime.day) == DateTime(now.year, now.month, now.day - 1)) {
+          title = "Yesterday";
+        } else {
+          title = startTime.day.toString() + "/" + startTime.month.toString() + "/" + startTime.year.toString();
+        }
+        bool titleExists = false;
+        for (MapEntry entry in entries) {
+          if (entry.key == title) {
+            titleExists = true;
+          }
+        }
+        if (!titleExists) {
+          entries.add(MapEntry(title, HistoryEntryType.TITLE));
+        }
+        entries.add(MapEntry(play, HistoryEntryType.PLAY));
+      }
+      return entries;
+    }();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Play>>(
-      future: this.apiClient.fetchHistory(24 * 7),
-      builder: (BuildContext context, AsyncSnapshot<List<Play>> snapshot) {
+    return FutureBuilder<List<MapEntry<dynamic, HistoryEntryType>>>(
+      future: this._future,
+      builder: (BuildContext context, AsyncSnapshot<List<MapEntry<dynamic, HistoryEntryType>>> snapshot) {
         if (snapshot.hasData) {
-          return Scrollbar(child: ListView.builder(
-            itemCount: snapshot.data.length + 1,
-            itemBuilder: (BuildContext context, int index) {
-              if (index == 0) {
-                return Container(child: Center(child: Text('History', style: highlightedTextStyle,)), height: 50,);
-              } else {
-                Play play = snapshot.data[index - 1];
-                return HorizontalMusicEntryWidget(play.track.album.imageUrl, play.track.name, play.track.artist.name,
-                  Column(children: [
-                    Text('${play.playTime.hour}:${play.playTime.minute}:${play.playTime.second}'),
-                    Text('${play.playTime.day}/${play.playTime.month}/${play.playTime.year}'),
-                  ])
-                );
-              }
-            },
-          ));
+          return Scrollbar(
+            child: ListView.builder(
+              key: new PageStorageKey('historyListView'),
+              itemCount: snapshot.data.length,
+              itemBuilder: (BuildContext context, int index) {
+                List<MapEntry<dynamic, HistoryEntryType>> entries = snapshot.data;
+                MapEntry<dynamic, HistoryEntryType> entry = entries[index];
+                if (entry.value == HistoryEntryType.TITLE) {
+                  return Container(
+                    child: Center(
+                      child: Text(entry.key, style: TextStyle(color: mainRed, fontSize: 21)),
+                    ),
+                    padding: EdgeInsets.fromLTRB(0, 10, 0, 0),
+                  );
+                } else if (entry.value == HistoryEntryType.PLAY){
+                  return Container(
+                    child: HorizontalMusicEntryWidget.fromTrack(entry.key.track),
+                    padding: EdgeInsets.fromLTRB(25, 10, 25, 0),
+                  );
+                }
+              },
+            ),
+          );
         } else {
           return Center(child: CircularProgressIndicator());
         }
       }
     );
   }
-
 }
 
-class LeaderboardWidget extends StatelessWidget {
+enum LeaderboardType {
+  TODAY, THIS_WEEK, THIS_MONTH
+}
+
+class LeaderboardWidget extends StatefulWidget {
   final APIClient apiClient;
 
   LeaderboardWidget(this.apiClient);
+  
+  @override
+  State<StatefulWidget> createState() => LeaderboardWidgetState(this.apiClient);
+}
+
+class LeaderboardWidgetState extends State<LeaderboardWidget> {
+  APIClient apiClient;
+  LeaderboardType type = LeaderboardType.TODAY;
+  List<int> _indicesOfWidgetsToExpand = [];
+  bool _reload = true;
+
+  LeaderboardWidgetState(this.apiClient);
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<User>>(
-      future: this.apiClient.fetchTopUsers(0),
-      builder: (BuildContext context, AsyncSnapshot<List<User>> snapshot) {
-        if (snapshot.hasData) {
-          return Scrollbar(child: ListView.builder(
-            itemCount: snapshot.data.length  + 1,
-            itemBuilder: (BuildContext context, int index) {
-              if (index == 0) {
-                return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  DropdownButton(
-                    value: 'past day',
-                    items: <String>['past day', 'past week', 'past month'].map((String value) {
-                      return new DropdownMenuItem<String>(
-                        value: value,
-                        child: new Text(value),
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.fromLTRB(0, 20, 0, 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.only(bottomLeft: Radius.circular(25.0), topLeft: Radius.circular(25.0)),
+                child: FlatButton(
+                  onPressed: () {
+                    setState(() {
+                        this.type = LeaderboardType.TODAY;
+                        this._reload = true;
+                    });
+                  },
+                  padding: EdgeInsets.all(10.0),
+                  child: Text(
+                    'Today',
+                    style: TextStyle(fontSize: 17)
+                  ),
+                  color: this.type == LeaderboardType.TODAY ? mainRed : secondaryBlack,
+                  splashColor: mainRed,
+                ),
+              ),
+              FlatButton(
+                onPressed: () {
+                  setState(() {
+                      this.type = LeaderboardType.THIS_WEEK;
+                      this._reload = true;
+                  });
+                },
+                padding: EdgeInsets.all(10.0),
+                child: Text(
+                  'This week',
+                  style: TextStyle(fontSize: 17)
+                ),
+                color: this.type == LeaderboardType.THIS_WEEK ? mainRed : secondaryBlack,
+                splashColor: mainRed,
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.only(bottomRight: Radius.circular(25.0), topRight: Radius.circular(25.0)),
+                child: FlatButton(
+                  onPressed: () {
+                    setState(() {
+                        this.type = LeaderboardType.THIS_MONTH;
+                        this._reload = true;
+                    });
+                  },
+                  padding: EdgeInsets.all(10.0),
+                  child: Text(
+                    'This month',
+                    style: TextStyle(fontSize: 17)
+                  ),
+                  color: this.type == LeaderboardType.THIS_MONTH ? mainRed : secondaryBlack,
+                  splashColor: mainRed,
+                ),
+              )
+            ],
+          ),
+        ),
+        Expanded(
+          child: FutureBuilder<List<User>>(
+            future: () async {
+              int fromTime;
+              int toTime = DateTime.now().millisecondsSinceEpoch;
+              if (this.type == LeaderboardType.TODAY) {
+                fromTime = DateTimeHelper.lastMidnight().millisecondsSinceEpoch;
+              } else if (this.type == LeaderboardType.THIS_WEEK) {
+                fromTime = DateTimeHelper.beginningOfWeek().millisecondsSinceEpoch;
+              } else if (this.type == LeaderboardType.THIS_MONTH) {
+                fromTime = DateTimeHelper.beginningOfMonth().millisecondsSinceEpoch;
+              }
+              return await this.apiClient.fetchTopUsers(
+                fromTime,
+                toTime,
+              );
+            }(),
+            builder: (BuildContext context, AsyncSnapshot<List<User>> snapshot) {
+              if (snapshot.hasData && !(_reload && !(snapshot.connectionState == ConnectionState.done))) {
+                return Scrollbar(
+                  child: ListView.builder(
+                    itemCount: snapshot.data.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      User user = snapshot.data[index];
+                      int hrs = user.playDuration.inHours;
+                      int mins = user.playDuration.inMinutes % 60;
+                      int secs = user.playDuration.inSeconds % 60;
+                      return InkWell(
+                        child: Container(
+                          margin: EdgeInsets.fromLTRB(10, 20, 15, 5),
+                          child: ClipRRect(
+                            child: Column(
+                              children: [
+                                Container(
+                                  height: 80,
+                                  padding: EdgeInsets.fromLTRB(10, 5, 10, 5),
+                                  color: tertiaryBlack,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: <Widget>[
+                                      Text(user.username, overflow: TextOverflow.ellipsis, style: highlightedTextStyle,),
+                                      Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          if (hrs > 0) Text(hrs.toString() + ' hrs', style: TextStyle(color: secondaryBlack)),
+                                          if (mins > 0) Text(mins.toString() + ' mins', style: TextStyle(color: secondaryBlack)),
+                                          if (secs > 0) Text(secs.toString() + ' secs', style: TextStyle(color: secondaryBlack)),
+                                        ]
+                                      ),
+                                    ]
+                                  ),
+                                ),
+                                Container(
+                                  padding: EdgeInsets.fromLTRB(5, 5, 10, 5),
+                                  height: _indicesOfWidgetsToExpand.contains(index) ? 185 : 0,
+                                  color: tertiaryBlack,
+                                  child: Column(
+                                    children: [
+                                      for (Track track in user.topTracks.keys) Container(
+                                        child: HorizontalMusicEntryWidget.fromTrack(track, playDuration: user.topTracks[track]),
+                                        padding: EdgeInsets.fromLTRB(0, 0, 0, 4),
+                                      ),
+                                    ]
+                                  ),
+                                ),
+                              ]
+                            ),
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        onTap: () {
+                          setState(() {
+                              _reload = false;
+                              if (_indicesOfWidgetsToExpand.contains(index)) {
+                              _indicesOfWidgetsToExpand.remove(index);
+                              } else {
+                                _indicesOfWidgetsToExpand.add(index);
+                              }
+                          });
+                        }
                       );
-                    }).toList(),
-                    onChanged: null
-                  )
-                ]);
+                    }
+                  ),
+                );
               } else {
-                User user = snapshot.data[index - 1];
-                return Container(child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(
-                      child: Container(
-                        child: Text(user.username, overflow: TextOverflow.ellipsis, style: highlightedTextStyle,),
-                        margin: EdgeInsets.all(5),
-                      ),
-                    ),
-                    Container(child:
-                      Column(
-                        children: [
-                          Text((user.msListened / 1000 / 60 / 60).toInt().toString() + ' hrs', style: textStyle,),
-                          Text(((user.msListened / 1000 / 60) % 60).toInt().toString() + ' mins', style: textStyle,),
-                          Text(((user.msListened / 1000) % 60).toInt().toString() + ' secs', style: textStyle,),
-                        ]
-                      ), margin: EdgeInsets.all(5)
-                    )
-                  ]
-                ), color: Colors.black, margin: EdgeInsets.fromLTRB(10, 5, 10, 5), height: 70);
+                return Center(child: CircularProgressIndicator());
               }
             }
-          ));
-        } else {
-          return Center(child: CircularProgressIndicator());
-        }
-      }
+          )
+        ),
+      ],
     );
   }
 }
@@ -498,11 +900,6 @@ class AuthWidgetState extends State<AuthWidget> {
     }
     return Scaffold(body: registerNotLogin ? RegisterWidget(widget.apiClient, this) :
       LoginWidget(widget.apiClient, this, () { widget.rootWidgetState.setState(() { }); }));
-    // if (registerNotLogin)
-    //   return RegisterWidget(widget.apiClient, this);
-    // return LoginWidget(widget.apiClient, this, () {
-      
-    // });
   }
 }
 
@@ -823,6 +1220,138 @@ class FormButton extends StatelessWidget {
       ),
       color: secondaryBlack,
       splashColor: mainRed,
+    );
+  }
+}
+
+class TrackHistoryWidget extends StatelessWidget {
+  Track track;
+
+  TrackHistoryWidget(this.track);
+
+  @override
+  Widget build(BuildContext context) {
+    return MainContainerWidget(
+      child: ListView.builder(
+        itemCount: this.track.plays.length + 1,
+        itemBuilder: (BuildContext _, int index) {
+          if (index == 0) {
+            return Column(
+              children: [
+                SizedBox(height: 10),
+                Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_downward, color: mainRed),
+                        tooltip: "close",
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.center,
+                      child: Column(
+                        children: [
+                          Text(this.track.name, style: highlightedTextStyle),
+                          Text(this.track.artists[0].name, style: TextStyle(color: secondaryBlack)),
+                        ]
+                      ),
+                    )
+                  ],
+                ),
+                Row(children: [Expanded(child: Container(
+                        child: Image.network(this.track.album.covers[2].url, fit: BoxFit.contain),
+                        padding: EdgeInsets.fromLTRB(15, 0, 15, 0),
+                ))]),
+                SizedBox(height: 10),
+                Text("Track details", style: highlightedTextStyle),
+                Text("total play time: 316 hrs 31 mins", style: TextStyle(color: secondaryBlack)),
+                Text("total plays: 716", style: TextStyle(color: secondaryBlack)),
+                Text("all time rank: 213", style: TextStyle(color: secondaryBlack)),
+              ]
+            );
+          } else {
+            Play play = this.track.plays[index - 1];
+            return Container(
+              margin: EdgeInsets.fromLTRB(25, 10, 25, 0),
+              padding: EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: tertiaryBlack,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, color: secondaryBlack),
+                      SizedBox(width: 3),
+                      Text(play.startDateTime().toString(), style: TextStyle(color: mainRed)),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Icon(Icons.play_arrow, color: secondaryBlack),
+                      SizedBox(width: 3),
+                      Text(
+                        (play.durationPlayed().inHours > 0 ? play.durationPlayed().inHours.toString() + " hrs " : "") +
+                        (play.durationPlayed().inMinutes > 0 ? play.durationPlayed().inMinutes.toString() + " mins " : "") +
+                        (play.durationPlayed().inSeconds > 0 ? play.durationPlayed().inSeconds.toString() + " secs " : ""),
+                        style: TextStyle(color: secondaryBlack),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+}
+
+class GeneralPage extends StatelessWidget {
+  Widget content;
+  Widget title;
+
+  GeneralPage({this.title, this.content});
+
+  @override
+  Widget build(BuildContext context) {
+    return MainContainerWidget(
+      child: Column(
+        children: [
+          Container(
+            height: 50,
+            child: Stack(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    icon: Icon(Icons.arrow_downward, color: mainRed),
+                    tooltip: "close",
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.center,
+                  child: this.title,
+                )
+              ],
+            ),
+          ),
+          Container(
+            height: 2,
+            color: mainRed,
+          ),
+          Expanded(child: this.content),
+        ],
+      ),
     );
   }
 }
