@@ -399,74 +399,35 @@ class APIClient {
     this.secureStorage = new FlutterSecureStorage();
   }
 
+  Future<void> saveAuthData() async {
+    print(this.accessToken);
+    await this.secureStorage.write(key: 'refresh_token', value: this.refreshToken);
+    await this.secureStorage.write(key: 'access_token', value: this.accessToken);
+    await this.secureStorage.write(key: 'access_token_expiry_time', value: this.accessTokenExpiryTime.toString());
+    print(this.refreshToken);
+  }
+
   Future<void> init() async {
     this.dbProvider = DbProvider();
     await this.dbProvider.open();
-    Map<String, String> accessValues = await secureStorage.readAll();
+    Map<String, String> accessValues = await this.secureStorage.readAll();
+    print(accessValues);
     String accessToken = accessValues['access_token'];
     if (accessToken != null) {
       this.accessToken = accessToken;
       this.refreshToken = accessValues['refresh_token'];
-      this.accessTokenExpiryTime = int.parse(accessValues['expiry_time']);
+      this.accessTokenExpiryTime = int.parse(accessValues['access_token_expiry_time']);
     }
   }
 
-  void fetchNewAccessTokenIfNeeded() {
+  Future<void> fetchAccessTokenIfExpired() async {
     if (this.accessTokenExpiryTime < DateTime.now().millisecondsSinceEpoch) {
       this.fetchAccessToken();
-    } else if (this.refreshToken == null) {
     }
-  }
-
-  Future<List<Play>> fetchHistory(int hrsLimit) async {
-    http.Response r = await http.get(BACKEND + '/api/history?hrs_limit=' + hrsLimit.toString(), headers: {
-      'Authorization': 'Bearer ${this.accessToken}'
-    });
-    List<Play> plays = [];
-    List<dynamic> playsJson = json.decode(r.body);
-    for (dynamic playJson in playsJson) {
-      plays.add(Play.fromMap(playJson));
-    }
-    return plays;
-  }
-
-  Future<List<Play>> fetchTrackHistory(Track track, int hrsLimit) async {
-    http.Response r = await http.get(BACKEND + '/api/track_history?hrs_limit=' + hrsLimit.toString() + "&track_id=" + track.id,
-      headers: {
-      'Authorization': 'Bearer ${this.accessToken}'
-    });
-    List<Play> plays = [];
-    List<dynamic> playsJson = json.decode(r.body);
-    for (dynamic playJson in playsJson) {
-      plays.add(Play.fromMap(playJson));
-    }
-    return plays;
-  }
-
-  Future<Map<int, List<Track>>> fetchTopTracks(List<int> hrs) async {
-    String hrsStr = "";
-    for (int hr in hrs) {
-      hrsStr += hr.toString() + ",";
-    }
-    hrsStr = hrsStr.substring(0, hrsStr.length - 1); // get rid of last comma
-    http.Response r = await http.get(BACKEND + '/api/top_tracks?hrs=' + uriEncode(hrsStr), headers: {
-      'Authorization': 'Bearer ${this.accessToken}'
-    });
-    Map<int, List<Track>> tracks = {};
-    Map<String, dynamic> tracksJson = json.decode(r.body);;
-    for (int i = 0; i < hrs.length; ++i) {
-      for (dynamic trackJson in tracksJson[hrs[i].toString()]) {
-        if (tracks.containsKey(hrs[i])) {
-          tracks[hrs[i]].add(Track.fromMap(trackJson));
-        } else {
-          tracks[hrs[i]] = [Track.fromMap(trackJson)];
-        }
-      }
-    }
-    return tracks;
   }
 
   Future<List<User>> fetchTopUsers(int fromTime, int toTime) async {
+    await this.fetchAccessTokenIfExpired();
     http.Response r = await http.get(BACKEND + '/api/top_users?from_time=' + fromTime.toString() + '&to_time=' + toTime.toString(),
       headers: {
         'Authorization': 'Bearer ${this.accessToken}'
@@ -480,10 +441,21 @@ class APIClient {
     return users;
   }
 
-  void fetchAccessToken() async {
-    /* fetch it here */
+  Future<void> fetchAccessToken() async {
+    http.Response r = await http.post(BACKEND + "/api/refresh", body: {
+        'refresh_token': this.refreshToken,
+      }, headers: {
+        'Authorization': 'Bearer ${this.refreshToken}',
+      }
+    );
+    print(r.body);
+    if (r.statusCode != 200)
+      return false;
+    Map<String, dynamic> rJson = json.decode(r.body);
+    this.accessToken = rJson['access_token'];
     this.accessTokenExpiryTime =
       new DateTime.now().millisecondsSinceEpoch + 30 * 60 * 1000; // after 30 minutes
+    this.saveAuthData();
   }
 
   Future<bool> authenticate(String username, String password) async {
@@ -507,6 +479,7 @@ class APIClient {
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
     this.accessTokenExpiryTime = expiryTime;
+    await this.saveAuthData();
     return true;
   }
 
@@ -532,6 +505,7 @@ class APIClient {
   }
 
   Future<APIData> fetchData(int fromTime, int toTime) async {
+    await this.fetchAccessTokenIfExpired();
     http.Response r = await http.get(BACKEND + '/api/data?from_time=' + fromTime.toString() + "&to_time=" + toTime.toString(),
       headers: {
         'Authorization': 'Bearer ${this.accessToken}'

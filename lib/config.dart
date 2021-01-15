@@ -15,5 +15,3 @@ const highlightedTextStyle = TextStyle(
 );
 
 const String BACKEND = kDebugMode ? 'http://localhost:5000' : 'https://trackifyapp.net';
-const String PASSWORD = "lion1230";
-const String USERNAME = "mahmoodsheikh36";

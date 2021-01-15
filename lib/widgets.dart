@@ -5,13 +5,6 @@ import 'package:flutter/rendering.dart';
 import 'package:trackify_android/config.dart';
 import 'package:trackify_android/api.dart';
 
-var horizontalExampleWidget = HorizontalMusicEntryWidget(
-  'https://i.scdn.co/image/ab67616d00004851572f05af2c4a51eaf9117d76',
-  'track title',
-  'artist name',
-  null
-);
-
 class MainContainerWidget extends StatelessWidget {
   Widget child;
   Widget bottomNavigationBar;
@@ -62,12 +55,11 @@ class VerticalMusicEntryWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(child: Container(
-      margin: EdgeInsets.all(4),
+    return Container(
+      width: 130,
       child: Column(
         children: <Widget>[
           Container(
-            width: 130,
             child: Image.network(
               this.imageUrl,
               frameBuilder: (BuildContext context, Widget child, int frame, bool wasSynchronouslyLoaded) {
@@ -102,9 +94,10 @@ class VerticalMusicEntryWidget extends StatelessWidget {
               ),
             ]
           )
-      ], crossAxisAlignment: CrossAxisAlignment.start,),
-      width: 140,
-    ), borderRadius: BorderRadius.circular(7),);
+        ],
+        crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+    );
   }
 }
 
@@ -120,7 +113,6 @@ class HorizontalMusicEntryWidget extends StatelessWidget {
     if (playDuration == null)
         return HorizontalMusicEntryWidget(track.album.covers[0].url, track.name, track.artists[0].name, null);
     int hrs, mins, secs;
-    print(playDuration);
     if (playDuration != null) {
       hrs = playDuration.inHours;
       mins = playDuration.inMinutes % 60;
@@ -180,39 +172,24 @@ class RootWidget extends StatefulWidget {
   RootWidget(this.apiClient);
 
   @override
-  State<StatefulWidget> createState() => RootWidgetState(this.apiClient);
+  State<StatefulWidget> createState() => RootWidgetState();
 }
 
 class RootWidgetState extends State<RootWidget> {
-  Future<bool> _future;
-  APIClient apiClient;
-
-  RootWidgetState(this.apiClient) {
-    this._future = () async {
-      await this.apiClient.init();
-      return true;
-    }();
-  }
-
-  @override
-  void initState() { 
-    super.initState();
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: FutureBuilder<bool>(
-        future: this._future,
-        builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
-          if (snapshot.hasData && snapshot.data) {
-            return AnimatedCrossFade(
-              crossFadeState: widget.apiClient.isAuthDone()
-                ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-              duration: Duration(milliseconds: 200),
-              firstChild: widget.apiClient.isAuthDone() ? AfterAuthWidget(widget.apiClient) : Container(),
-              secondChild: widget.apiClient.isAuthDone() ? Container() : AuthWidget(widget.apiClient, this),
-            );
+      home: FutureBuilder(
+        future: () async {
+          await widget.apiClient.init();
+        }(),
+        builder: (BuildContext context, AsyncSnapshot snapshot) {
+          if (snapshot.connectionState == ConnectionState.done) {
+            if (widget.apiClient.isAuthDone()) {
+              return AfterAuthWidget(widget.apiClient);
+            } else {
+              return AuthWidget(widget.apiClient, this);
+            }
           } else {
             return Scaffold(
               backgroundColor: mainBlack,
@@ -583,26 +560,27 @@ class TrackListWidgetState extends State<TrackListWidget> {
             child: ListView.builder(
               itemCount: widget.tracks.keys.length % _tracksPerRow == 1 ? widget.tracks.keys.length ~/ _tracksPerRow + 1 : widget.tracks.keys.length ~/ _tracksPerRow,
               itemBuilder: (BuildContext context, int index) {
-                return IntrinsicHeight(
-                  child: Row(
-                    mainAxisAlignment: index * _tracksPerRow + _tracksPerRow < widget.tracks.keys.length ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.start,
-                    children: [
-                      for (int i = index * _tracksPerRow; i < index * _tracksPerRow + _tracksPerRow && i < widget.tracks.keys.length; ++i) Flexible(
-                        child: InkWell(
+                return Row(
+                  mainAxisAlignment: index * _tracksPerRow + _tracksPerRow < widget.tracks.keys.length ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.start,
+                  children: [
+                    for (int i = index * _tracksPerRow; i < index * _tracksPerRow + _tracksPerRow && i < widget.tracks.keys.length; ++i) Flexible(
+                      child: InkWell(
+                        child: Container(
+                          padding: EdgeInsets.all(2),
                           child: VerticalMusicEntryWidget.fromTrack(widget.tracks.keys.elementAt(i),
                             playDuration: widget.tracks.values.elementAt(i),
                             showText: _showInfo,
                           ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => TrackHistoryWidget(widget.tracks.keys.elementAt(i))),
-                            );
-                          },
                         ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => TrackHistoryWidget(widget.tracks.keys.elementAt(i))),
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               }
             )
@@ -883,21 +861,6 @@ class AuthWidgetState extends State<AuthWidget> {
 
   @override
   Widget build(BuildContext context) {
-    if (USERNAME != null && PASSWORD != null && kDebugMode) {
-      return FutureBuilder(
-        future: () async {
-          await widget.apiClient.authenticate(USERNAME, PASSWORD);
-          if (widget.apiClient.isAuthDone()) {
-            widget.rootWidgetState.setState(() { });
-          } else {
-            throw new Exception("couldnt authenticate with username/password that were set in config.dart");
-          }
-        }(),
-        builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
-          return Center(child: CircularProgressIndicator(backgroundColor: mainRed,));
-        }
-      );
-    }
     return Scaffold(body: registerNotLogin ? RegisterWidget(widget.apiClient, this) :
       LoginWidget(widget.apiClient, this, () { widget.rootWidgetState.setState(() { }); }));
   }
