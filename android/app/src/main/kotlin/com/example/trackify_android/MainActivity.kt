@@ -1,4 +1,4 @@
-package com.example.trackify_android
+package com.mahmoodsheikh36.trackify
 
 import androidx.annotation.NonNull;
 import io.flutter.embedding.android.FlutterActivity

@@ -5,7 +5,7 @@ const mainBlack = Color.fromRGBO(38, 38, 38, 1);
 const secondaryBlack = Color.fromRGBO(130, 130, 130, 1);
 const tertiaryBlack = Color.fromRGBO(17, 17, 17, 0.65);
 const textColor = Colors.white;
-const mainRed = Color.fromRGBO(242, 93, 93, 1);
+const mainRed = Color.fromRGBO(210, 93, 93, 1);
 const textStyle = TextStyle(
   color: textColor,
 );
