@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:trackify_android/db/models.dart';
 import 'package:trackify_android/db/db.dart';
-import 'package:trackify_android/config.dart';
+import 'package:trackify_android/static.dart';
 
 class DateTimeHelper {
   static DateTime lastMidnight() {
@@ -58,16 +58,12 @@ class JsonStorage {
 }
 
 class APIClient {
-  FlutterSecureStorage secureStorage;
+  FlutterSecureStorage secureStorage = FlutterSecureStorage();
   String accessToken, refreshToken;
   int accessTokenExpiryTime;
-  DbProvider dbProvider;
+  DbProvider dbProvider = DbProvider();
   JsonStorage jsonStorage = JsonStorage(kDebugMode ? 'debug_storage.json' : 'storage.json');
   APIData _data;
-
-  APIClient() {
-    this.secureStorage = new FlutterSecureStorage();
-  }
 
   Future<void> saveAuthData() async {
     await this.secureStorage.write(
@@ -98,7 +94,6 @@ class APIClient {
 
   Future<void> init() async {
     //await secureStorage.deleteAll();
-    this.dbProvider = DbProvider();
     await this.dbProvider.open();
     await this.loadAuthData();
   }
@@ -112,7 +107,7 @@ class APIClient {
 
   Future<List<User>> fetchTopUsers(int fromTime, int toTime) async {
     await this.fetchAccessTokenIfExpired();
-    http.Response r = await http.get(BACKEND + '/api/top_users?from_time=' + fromTime.toString() + '&to_time=' + toTime.toString(),
+    http.Response r = await http.get(Uri.parse(BACKEND + '/api/top_users?from_time=' + fromTime.toString() + '&to_time=' + toTime.toString()),
       headers: {
         'Authorization': 'Bearer ${this.accessToken}'
       }
@@ -126,7 +121,7 @@ class APIClient {
   }
 
   Future<bool> fetchAccessToken() async {
-    http.Response r = await http.post(BACKEND + "/api/refresh", body: {
+    http.Response r = await http.post(Uri.parse(BACKEND + "/api/refresh"), body: {
         'refresh_token': this.refreshToken,
       }, headers: {
         'Authorization': 'Bearer ${this.refreshToken}',
@@ -135,7 +130,7 @@ class APIClient {
     if (r.statusCode != 200)
       return false;
     Map<String, dynamic> rJson = json.decode(r.body);
-    this.accessToken = rJson['access_token'];
+    this.accessToken = rJson['access_token']['id'];
     this.accessTokenExpiryTime =
       new DateTime.now().millisecondsSinceEpoch + 30 * 60 * 1000; // after 30 minutes
     await this.saveAuthData();
@@ -147,7 +142,7 @@ class APIClient {
   }
 
   Future<bool> fetchRefreshToken(String username, String password) async {
-    http.Response r = await http.post(BACKEND + "/api/login", body: {
+    http.Response r = await http.post(Uri.parse(BACKEND + "/api/login"), body: {
       'username': username,
       'password': password
     });
@@ -167,7 +162,7 @@ class APIClient {
     return true;
   }
 
-  bool isAuthDone() {
+  bool hasAccessToken() {
     return this.accessToken != null;
   }
 
@@ -216,19 +211,18 @@ class APIClient {
   }
 
   Future<bool> _fetchData(int fromTime, int toTime) async {
-    print(this.accessToken);
     http.Response r;
     try {
       if (!await this.fetchAccessTokenIfExpired()) {
         return false;
       }
-      r = await http.get(
-        BACKEND + '/api/data?from_time=' + fromTime.toString() + "&to_time=" + toTime.toString(),
+      r = await http.get(Uri.parse(BACKEND + '/api/data?from_time=' + fromTime.toString() + "&to_time=" + toTime.toString()),
         headers: {
           'Authorization': 'Bearer ${this.accessToken}'
         }
       );
-    } catch (_) {
+    } catch (exception) {
+      print(exception);
       return false;
     }
 
