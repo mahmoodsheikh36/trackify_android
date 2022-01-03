@@ -93,7 +93,7 @@ class APIClient {
   }
 
   Future<void> init() async {
-    //await secureStorage.deleteAll();
+    await secureStorage.deleteAll();
     await this.dbProvider.open();
     await this.loadAuthData();
   }

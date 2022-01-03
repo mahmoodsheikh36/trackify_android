@@ -123,7 +123,7 @@ class GeneralRouteWidgetState extends State<GeneralRouteWidget> {
                             alignment: Alignment.centerLeft,
                             child: Container(
                               padding: EdgeInsets.fromLTRB(10, 0, 0, 0),
-                              child: Text("Trackify", style: TextStyle(color: mainBlack, fontSize: 21)),
+                              child: Text("Trackify2", style: TextStyle(color: mainBlack, fontSize: 21)),
                             )
                           ),
                           Align(

@@ -31,28 +31,47 @@ class IndexRoute extends MyRoute {
 
           return Container(color: Colors.black);
         } else {
-          return Column(
-            children: [
-              Text('Trackify'),
-              TextButton(
-                style: ButtonStyle(
-                  foregroundColor: MaterialStateProperty.all<Color>(Colors.blue),
-                ),
-                onPressed: () {
-                  router.pushRoute(LoginRoute());
-                },
-                child: Text('Login'),
+          return Scaffold(
+            backgroundColor: mainBlack,
+            body: SafeArea(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    margin: EdgeInsets.fromLTRB(0, 0, 0, 30),
+                    child: Text('Welcome', style: TextStyle(color: mainRed, fontSize: 40)),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    margin: EdgeInsets.fromLTRB(20, 0, 20, 0),
+                    child: TextButton(
+                      style: ButtonStyle(
+                        backgroundColor: MaterialStateProperty.all<Color>(secondaryBlack),
+                        foregroundColor: MaterialStateProperty.all<Color>(mainBlack),
+                      ),
+                      onPressed: () {
+                        router.pushRoute(LoginRoute());
+                      },
+                      child: Text('Login'),
+                    ),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    margin: EdgeInsets.fromLTRB(20, 0, 20, 0),
+                    child: TextButton(
+                      style: ButtonStyle(
+                        backgroundColor: MaterialStateProperty.all<Color>(secondaryBlack),
+                        foregroundColor: MaterialStateProperty.all<Color>(mainBlack),
+                      ),
+                      onPressed: () {
+                        router.pushRoute(RegisterRoute());
+                      },
+                      child: Text('Register'),
+                    ),
+                  ),
+                ],
               ),
-              TextButton(
-                style: ButtonStyle(
-                  foregroundColor: MaterialStateProperty.all<Color>(Colors.blue),
-                ),
-                onPressed: () {
-                  router.pushRoute(RegisterRoute());
-                },
-                child: Text('Register'),
-              ),
-            ],
+            ),
           );
         }
       }
